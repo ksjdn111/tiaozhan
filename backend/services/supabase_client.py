@@ -1,3 +1,9 @@
+import os
+import certifi
+
+os.environ.setdefault('SSL_CERT_FILE', certifi.where())
+os.environ.setdefault('REQUESTS_CA_BUNDLE', certifi.where())
+
 from supabase import create_client, Client
 from config import SUPABASE_URL, SUPABASE_KEY
 
