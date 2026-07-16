@@ -17,8 +17,20 @@ const authErrors: Record<string, string> = {
   'Unable to validate email': '邮箱格式无效',
 }
 
-function translateError(msg: string): string {
-  return authErrors[msg] || msg
+function translateError(msg: string, map: Record<string, string> = authErrors): string {
+  const rateMatch = msg.match(/only request this after (\d+)/)
+  if (rateMatch) {
+    return `操作太频繁，请 ${rateMatch[1]} 秒后再试`
+  }
+  for (const [key, val] of Object.entries(map)) {
+    if (msg.includes(key)) return val
+  }
+  return msg
+}
+
+const profileErrors: Record<string, string> = {
+  'duplicate key value violates unique constraint "profiles_username_key"': '用户名已被使用',
+  'duplicate key value violates unique constraint "profiles_pkey"': '该邮箱已注册',
 }
 
 export default function LoginPage() {
@@ -28,11 +40,19 @@ export default function LoginPage() {
   const handleLogin = async (values: { email: string; password: string }) => {
     setLoading(true)
     const { data, error } = await supabase.auth.signInWithPassword(values)
-    setLoading(false)
     if (error) {
-      message.error(translateError(error.message))
+      setLoading(false)
+      message.error(translateError(error.message, authErrors))
       return
     }
+    const pending = localStorage.getItem('pending_username')
+    if (pending) {
+      localStorage.removeItem('pending_username')
+      await supabase.from('profiles')
+        .update({ username: pending })
+        .eq('id', data.user.id)
+    }
+    setLoading(false)
     message.success('登录成功')
     router.replace('/dashboard')
   }
@@ -43,21 +63,26 @@ export default function LoginPage() {
       email: values.email,
       password: values.password,
     })
-    if (error || !data.user) {
+    if (error) {
       setLoading(false)
-      message.error(translateError(error?.message || '注册失败'))
+      message.error(translateError(error.message, authErrors))
       return
     }
-    const { error: profileError } = await supabase.from('profiles').insert({
-      id: data.user.id,
-      username: values.username
-    })
+    if (!data.user) {
+      setLoading(false)
+      message.error('注册失败')
+      return
+    }
+    const identities = data.user.identities ?? []
+    if (identities.length === 0) {
+      await supabase.auth.signOut().catch(() => {})
+      setLoading(false)
+      message.error('该邮箱已注册')
+      return
+    }
+    localStorage.setItem('pending_username', values.username)
     setLoading(false)
-    if (profileError) {
-      message.error('创建用户信息失败')
-      return
-    }
-    message.success('注册成功，请查看邮箱验证码后登录')
+    message.success('注册成功，请查看邮箱验证邮件后登录')
   }
 
   return (
