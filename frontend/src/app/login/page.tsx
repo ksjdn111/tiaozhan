@@ -6,7 +6,7 @@ import { Card, Form, Input, Button, Tabs, message } from 'antd'
 import { UserOutlined, LockOutlined, MailOutlined } from '@ant-design/icons'
 import { supabase } from '@/lib/supabase'
 
-const API = 'http://localhost:5000/api'
+const API = '/api'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -26,18 +26,21 @@ export default function LoginPage() {
 
   const handleRegister = async (values: { email: string; password: string; username: string }) => {
     setLoading(true)
-    const res = await fetch(`${API}/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(values)
+    const { data, error } = await supabase.auth.signUp({
+      email: values.email,
+      password: values.password,
+    })
+    if (error || !data.user) {
+      setLoading(false)
+      message.error(error?.message || '注册失败')
+      return
+    }
+    await supabase.from('profiles').insert({
+      id: data.user.id,
+      username: values.username
     })
     setLoading(false)
-    const result = await res.json()
-    if (result.code === 0) {
-      message.success('注册成功，请查看邮箱验证码后登录')
-    } else {
-      message.error(result.message)
-    }
+    message.success('注册成功，请查看邮箱验证码后登录')
   }
 
   return (

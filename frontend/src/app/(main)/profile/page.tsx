@@ -6,7 +6,7 @@ import { LogoutOutlined, TrophyOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
-const API = 'http://localhost:5000/api'
+const API = '/api'
 
 export default function ProfilePage() {
   const router = useRouter()

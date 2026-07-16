@@ -5,7 +5,7 @@ import { Card, Button, Spin, Empty, Tag, message } from 'antd'
 import { HeartOutlined, HeartFilled } from '@ant-design/icons'
 import { supabase } from '@/lib/supabase'
 
-const API = 'http://localhost:5000/api'
+const API = '/api'
 
 const difficultyColors: Record<number, string> = { 1: 'green', 2: 'cyan', 3: 'orange', 4: 'red', 5: 'purple' }
 
