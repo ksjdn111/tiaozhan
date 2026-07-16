@@ -8,6 +8,19 @@ import { supabase } from '@/lib/supabase'
 
 const API = '/api'
 
+const authErrors: Record<string, string> = {
+  'Invalid login credentials': '邮箱或密码错误',
+  'Email not confirmed': '邮箱尚未验证，请查收验证邮件',
+  'User not found': '用户不存在',
+  'User already registered': '该邮箱已注册',
+  'Password should be at least 6 characters': '密码至少6位',
+  'Unable to validate email': '邮箱格式无效',
+}
+
+function translateError(msg: string): string {
+  return authErrors[msg] || msg
+}
+
 export default function LoginPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
@@ -17,7 +30,7 @@ export default function LoginPage() {
     const { data, error } = await supabase.auth.signInWithPassword(values)
     setLoading(false)
     if (error) {
-      message.error(error.message)
+      message.error(translateError(error.message))
       return
     }
     message.success('登录成功')
@@ -32,14 +45,18 @@ export default function LoginPage() {
     })
     if (error || !data.user) {
       setLoading(false)
-      message.error(error?.message || '注册失败')
+      message.error(translateError(error?.message || '注册失败'))
       return
     }
-    await supabase.from('profiles').insert({
+    const { error: profileError } = await supabase.from('profiles').insert({
       id: data.user.id,
       username: values.username
     })
     setLoading(false)
+    if (profileError) {
+      message.error('创建用户信息失败')
+      return
+    }
     message.success('注册成功，请查看邮箱验证码后登录')
   }
 
