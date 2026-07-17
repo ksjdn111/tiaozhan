@@ -22,5 +22,12 @@ app.register_blueprint(badges_bp, url_prefix='/api/badges')
 def health():
     return {'code': 0, 'message': 'ok'}
 
+@app.route('/api/debug-auth')
+def debug_auth():
+    from utils.auth import get_current_user
+    uid = get_current_user()
+    auth = request.headers.get('Authorization', '')[:50]
+    return {'code': 0, 'user_id': uid, 'auth_header': auth}
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=FLASK_PORT, debug=True)
