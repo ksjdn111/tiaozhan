@@ -12,6 +12,7 @@ const difficultyColors: Record<number, string> = { 1: 'green', 2: 'cyan', 3: 'or
 export default function FeedPage() {
   const [feed, setFeed] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   const getToken = async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -19,12 +20,18 @@ export default function FeedPage() {
   }
 
   const fetchFeed = async () => {
-    const token = await getToken()
-    const res = await fetch(`${API}/feed/list`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    const data = await res.json()
-    if (data.code === 0) setFeed(data.data)
+    try {
+      const token = await getToken()
+      if (!token) { setError('未登录，请重新登录'); setLoading(false); return }
+      const res = await fetch(`${API}/feed/list`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      const data = await res.json()
+      if (data.code === 0) { setFeed(data.data); setError('') }
+      else { setError(data.message || '获取动态失败') }
+    } catch {
+      setError('网络错误，请确认后端服务已启动')
+    }
     setLoading(false)
   }
 
@@ -53,6 +60,7 @@ export default function FeedPage() {
   }
 
   if (loading) return <div style={{ textAlign: 'center', paddingTop: 100 }}><Spin size="large" /></div>
+  if (error) return <Empty description={error} style={{ paddingTop: 100 }} />
   if (feed.length === 0) return <Empty description="暂无动态" style={{ paddingTop: 100 }} />
 
   return (

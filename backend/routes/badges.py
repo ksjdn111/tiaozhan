@@ -32,7 +32,12 @@ def get_stats():
     supabase = get_supabase()
     total = supabase.from_('daily_challenges').select('id', count='exact').eq('user_id', user_id).execute()
     completed = supabase.from_('daily_challenges').select('id', count='exact').eq('user_id', user_id).eq('status', 'done').execute()
-    likes_received = supabase.from_('likes').select('id', count='exact').execute()
+    user_dc_ids = supabase.from_('daily_challenges').select('id').eq('user_id', user_id).execute()
+    ids = [d['id'] for d in user_dc_ids.data]
+    likes_received = 0
+    if ids:
+        likes_received = supabase.from_('likes').select('id', count='exact').in_('daily_challenge_id', ids).execute()
+        likes_received = likes_received.count
 
     return jsonify({
         'code': 0,

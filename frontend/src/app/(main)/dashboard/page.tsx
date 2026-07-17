@@ -16,6 +16,7 @@ const categoryIcons: Record<string, string> = {
 export default function DashboardPage() {
   const [challenge, setChallenge] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [note, setNote] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
 
@@ -25,12 +26,18 @@ export default function DashboardPage() {
   }
 
   const fetchToday = async () => {
-    const token = await getToken()
-    const res = await fetch(`${API}/challenge/today`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    const data = await res.json()
-    if (data.code === 0) setChallenge(data.data)
+    try {
+      const token = await getToken()
+      if (!token) { setError('未登录，请重新登录'); setLoading(false); return }
+      const res = await fetch(`${API}/challenge/today`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      const data = await res.json()
+      if (data.code === 0) { setChallenge(data.data); setError('') }
+      else { setError(data.message || '获取挑战失败') }
+    } catch {
+      setError('网络错误，请确认后端服务已启动')
+    }
     setLoading(false)
   }
 
@@ -63,6 +70,7 @@ export default function DashboardPage() {
   }
 
   if (loading) return <div style={{ textAlign: 'center', paddingTop: 100 }}><Spin size="large" /></div>
+  if (error) return <Empty description={error} />
   if (!challenge) return <Empty description="暂无挑战" />
 
   const c = challenge.challenge
