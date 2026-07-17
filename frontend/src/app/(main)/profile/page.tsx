@@ -20,6 +20,9 @@ export default function ProfilePage() {
   const [editOpen, setEditOpen] = useState(false)
   const [editUsername, setEditUsername] = useState('')
   const [editing, setEditing] = useState(false)
+  const [avatarModalOpen, setAvatarModalOpen] = useState(false)
+  const [avatarUrl, setAvatarUrl] = useState('')
+  const [avatarUpdating, setAvatarUpdating] = useState(false)
 
   const getToken = async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -97,21 +100,46 @@ export default function ProfilePage() {
       .from('avatars')
       .upload(filePath, file, { upsert: true })
 
-    if (uploadError) { message.error('头像上传失败'); return }
+    if (uploadError) {
+      message.error('头像上传失败，请确认已创建 avatars 存储桶（Supabase Dashboard > Storage）')
+      return
+    }
 
     const { data: { publicUrl } } = supabase.storage
       .from('avatars')
       .getPublicUrl(filePath)
 
     const token = await getToken()
-    await fetch(`${API}/auth/profile`, {
+    const res = await fetch(`${API}/auth/profile`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ avatar_url: publicUrl }),
     })
+    const data = await res.json()
+    if (data.code !== 0) { message.error(data.message || '保存失败'); return }
 
     setProfile({ ...profile, avatar_url: publicUrl })
     message.success('头像更新成功')
+  }
+
+  const handleSetAvatarUrl = async () => {
+    if (!avatarUrl.trim()) { message.error('请输入头像链接'); return }
+    setAvatarUpdating(true)
+    const token = await getToken()
+    const res = await fetch(`${API}/auth/profile`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ avatar_url: avatarUrl.trim() }),
+    })
+    const data = await res.json()
+    if (data.code === 0) {
+      setProfile({ ...profile, avatar_url: avatarUrl.trim() })
+      message.success('头像更新成功')
+      setAvatarModalOpen(false)
+    } else {
+      message.error(data.message || '更新失败')
+    }
+    setAvatarUpdating(false)
   }
 
   const handleLogout = async () => {
@@ -127,19 +155,17 @@ export default function ProfilePage() {
       <Card style={{ borderRadius: 12, marginTop: 16 }}>
         <div style={{ textAlign: 'center', marginBottom: 16 }}>
           <div style={{ position: 'relative', display: 'inline-block' }}>
-            <Upload
-              showUploadList={false}
-              beforeUpload={(file) => { handleAvatarUpload(file); return false }}
-              accept="image/*"
+            <Avatar
+              size={80}
+              src={profile?.avatar_url}
+              icon={<UserOutlined />}
+              style={{ cursor: 'pointer' }}
+              onClick={() => setAvatarModalOpen(true)}
+            />
+            <div
+              style={{ position: 'absolute', bottom: 0, right: 0, background: '#fff', borderRadius: '50%', padding: 2, cursor: 'pointer', border: '1px solid #d9d9d9' }}
+              onClick={() => setAvatarModalOpen(true)}
             >
-              <Avatar
-                size={80}
-                src={profile?.avatar_url}
-                icon={<UserOutlined />}
-                style={{ cursor: 'pointer' }}
-              />
-            </Upload>
-            <div style={{ position: 'absolute', bottom: 0, right: 0, background: '#fff', borderRadius: '50%', padding: 2, cursor: 'pointer' }} onClick={handleEdit}>
               <EditOutlined style={{ color: '#409EFF', fontSize: 14 }} />
             </div>
           </div>
@@ -198,6 +224,34 @@ export default function ProfilePage() {
       <div style={{ textAlign: 'center', marginTop: 24 }}>
         <Button danger icon={<LogoutOutlined />} onClick={handleLogout}>退出登录</Button>
       </div>
+
+      <Modal
+        title="修改头像"
+        open={avatarModalOpen}
+        onCancel={() => setAvatarModalOpen(false)}
+        footer={null}
+      >
+        <div style={{ textAlign: 'center', marginBottom: 16 }}>
+          <Avatar size={100} src={avatarUrl || profile?.avatar_url} icon={<UserOutlined />} />
+        </div>
+        <p style={{ marginBottom: 8 }}>上传图片：</p>
+        <Upload
+          showUploadList={false}
+          beforeUpload={(file) => { handleAvatarUpload(file); setAvatarModalOpen(false); return false }}
+          accept="image/*"
+        >
+          <Button block>选择图片上传</Button>
+        </Upload>
+        <p style={{ margin: '12px 0 8px' }}>或输入图片链接：</p>
+        <Input
+          value={avatarUrl}
+          onChange={e => setAvatarUrl(e.target.value)}
+          placeholder="https://example.com/avatar.jpg"
+        />
+        <Button type="primary" block style={{ marginTop: 8 }} loading={avatarUpdating} onClick={handleSetAvatarUrl}>
+          应用链接
+        </Button>
+      </Modal>
 
       <Modal
         title="修改用户名"
