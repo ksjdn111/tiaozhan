@@ -157,19 +157,31 @@ export default function LoginPage() {
             label: '注册',
             children: (
               <Form form={form} onFinish={handleRegister} size="large">
-                <Form.Item name="username" rules={[{ required: true, message: '请输入用户名' }]}>
-                  <Input prefix={<UserOutlined />} placeholder="用户名" />
+                <Form.Item name="username" rules={[
+                  { required: true, message: '请输入用户名' },
+                  { min: 3, message: '用户名至少 3 个字符' },
+                  { max: 20, message: '用户名最多 20 个字符' },
+                  { pattern: /^[a-zA-Z0-9_\u4e00-\u9fa5]+$/, message: '用户名只能包含字母、数字、下划线和中文' },
+                ]}>
+                  <Input prefix={<UserOutlined />} placeholder="用户名" maxLength={20} />
                 </Form.Item>
-                <Form.Item name="email" rules={[{ required: true, message: '请输入邮箱' }]}>
+                <Form.Item name="email" rules={[
+                  { required: true, message: '请输入邮箱' },
+                  { type: 'email', message: '邮箱格式不正确' },
+                ]}>
                   <Input prefix={<MailOutlined />} placeholder="邮箱" />
                 </Form.Item>
                 <Form.Item
                   name="password"
-                  rules={[{ required: true, message: '请输入密码' }]}
+                  rules={[
+                    { required: true, message: '请输入密码' },
+                    { max: 64, message: '密码最多 64 个字符' },
+                  ]}
                 >
                   <Input.Password
                     prefix={<LockOutlined />}
                     placeholder="密码"
+                    maxLength={64}
                     onChange={e => setRegPwd(e.target.value)}
                   />
                 </Form.Item>
