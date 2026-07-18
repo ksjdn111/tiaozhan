@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Card, Button, Spin, Statistic, Row, Col, Empty, message, List, Tag, Modal, Input, Upload, Avatar, Divider } from 'antd'
-import { LogoutOutlined, TrophyOutlined, EditOutlined, UserOutlined, FireOutlined, CheckCircleOutlined, HeartOutlined, SettingOutlined } from '@ant-design/icons'
+import { LogoutOutlined, TrophyOutlined, EditOutlined, UserOutlined, FireOutlined, CheckCircleOutlined, HeartOutlined, SettingOutlined, SmileOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
@@ -21,6 +21,9 @@ export default function ProfilePage() {
   const [editUsername, setEditUsername] = useState('')
   const [editing, setEditing] = useState(false)
   const [avatarModalOpen, setAvatarModalOpen] = useState(false)
+  const [bioModalOpen, setBioModalOpen] = useState(false)
+  const [editBio, setEditBio] = useState('')
+  const [bioUpdating, setBioUpdating] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState('')
   const [avatarUpdating, setAvatarUpdating] = useState(false)
 
@@ -138,6 +141,26 @@ export default function ProfilePage() {
     setAvatarUpdating(false)
   }
 
+  const handleSaveBio = async () => {
+    if (editBio.length > 200) { message.error('简介最长200个字符'); return }
+    setBioUpdating(true)
+    const token = await getToken()
+    const res = await fetch(`${API}/auth/profile`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ bio: editBio.trim() }),
+    })
+    const data = await res.json()
+    if (data.code === 0) {
+      setProfile({ ...profile, bio: editBio.trim() })
+      message.success('简介已更新')
+      setBioModalOpen(false)
+    } else {
+      message.error(data.message || '更新失败')
+    }
+    setBioUpdating(false)
+  }
+
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.replace('/login')
@@ -177,6 +200,12 @@ export default function ProfilePage() {
         <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
           <span style={{ fontSize: 20, fontWeight: 700 }}>{profile?.username || '未设置用户名'}</span>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={handleEdit} style={{ fontSize: 14 }} />
+        </div>
+        <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+          <span style={{ fontSize: 13, color: '#888', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {profile?.bio || '暂无简介'}
+          </span>
+          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => { setEditBio(profile?.bio || ''); setBioModalOpen(true) }} style={{ fontSize: 12, color: '#bbb' }} />
         </div>
 
         {/* Stats row */}
@@ -294,6 +323,11 @@ export default function ProfilePage() {
         <Button type="primary" block style={{ marginTop: 8, borderRadius: 10, height: 40 }} loading={avatarUpdating} onClick={handleSetAvatarUrl}>
           应用链接
         </Button>
+      </Modal>
+
+      {/* Bio modal */}
+      <Modal title="修改个人简介" open={bioModalOpen} onOk={handleSaveBio} onCancel={() => setBioModalOpen(false)} confirmLoading={bioUpdating} centered>
+        <Input.TextArea value={editBio} onChange={e => setEditBio(e.target.value)} placeholder="介绍一下自己吧" maxLength={200} showCount rows={3} style={{ borderRadius: 10 }} />
       </Modal>
 
       {/* Username modal */}
