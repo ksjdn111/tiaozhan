@@ -72,7 +72,19 @@ def update_profile():
         update_data['username'] = data['username']
     if 'avatar_url' in data:
         update_data['avatar_url'] = data['avatar_url']
+    if 'bio' in data:
+        update_data['bio'] = data['bio']
 
     supabase = get_auth_supabase()
     supabase.from_('profiles').update(update_data).eq('id', user_id).execute()
     return jsonify({'code': 0, 'message': '更新成功'})
+
+
+@auth_bp.route('/public-profile/<uuid:user_id>', methods=['GET'])
+def get_public_profile(user_id):
+    user_id_str = str(user_id)
+    supabase = get_auth_supabase()
+    profile = supabase.from_('profiles').select('*').eq('id', user_id_str).single().execute()
+    if not profile.data:
+        return jsonify({'code': 1, 'message': '用户不存在'}), 404
+    return jsonify({'code': 0, 'data': profile.data})

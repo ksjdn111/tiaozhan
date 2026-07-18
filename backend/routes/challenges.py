@@ -162,6 +162,34 @@ def skip_challenge():
     return jsonify({'code': 0, 'message': '已跳过'})
 
 
+@challenges_bp.route('/custom', methods=['POST'])
+def create_custom_challenge():
+    user_id = get_current_user()
+    if not user_id:
+        return jsonify({'code': 1, 'message': '未授权'}), 401
+
+    data = request.get_json()
+    title = data.get('title', '').strip()
+    description = data.get('description', '').strip()
+    category = data.get('category', '').strip()
+    difficulty = data.get('difficulty', 3)
+
+    if not title or not description or not category:
+        return jsonify({'code': 1, 'message': '标题、描述和分类不能为空'}), 400
+
+    if len(title) > 100:
+        return jsonify({'code': 1, 'message': '标题最长100个字符'}), 400
+
+    supabase = get_auth_supabase()
+    chal = supabase.from_('challenges').insert({
+        'title': title, 'description': description,
+        'category': category, 'difficulty': difficulty,
+        'creator_id': str(user_id)
+    }).execute()
+
+    return jsonify({'code': 0, 'message': '自定义挑战创建成功', 'data': chal.data[0] if chal.data else None})
+
+
 @challenges_bp.route('/history', methods=['GET'])
 def get_history():
     user_id = get_current_user()
