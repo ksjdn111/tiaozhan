@@ -22,12 +22,10 @@ def send_request():
 
     existing = supabase.from_('friends').select('*').or_(
         f'requester_id.eq.{user_id},addressee_id.eq.{user_id}'
-    ).or_(
-        f'requester_id.eq.{target_id},addressee_id.eq.{target_id}'
     ).execute()
 
-    for f in existing.data:
-        ids = {f['requester_id'], f['addressee_id']}
+    for f in existing.data or []:
+        ids = {str(f['requester_id']), str(f['addressee_id'])}
         if str(user_id) in ids and str(target_id) in ids:
             if f['status'] == 'accepted':
                 return jsonify({'code': 1, 'message': '已经是好友了'}), 400
@@ -261,14 +259,12 @@ def check_friendship(target_id):
         return jsonify({'code': 0, 'data': {'status': 'self'}})
 
     supabase = get_auth_supabase()
-    result = supabase.from_('friends').select('status').or_(
+    result = supabase.from_('friends').select('requester_id, addressee_id, status').or_(
         f'requester_id.eq.{user_id},addressee_id.eq.{user_id}'
-    ).or_(
-        f'requester_id.eq.{target_id_str},addressee_id.eq.{target_id_str}'
     ).execute()
 
-    for f in result.data:
-        ids = {f['requester_id'], f['addressee_id']}
+    for f in result.data or []:
+        ids = {str(f['requester_id']), str(f['addressee_id'])}
         if str(user_id) in ids and target_id_str in ids:
             return jsonify({'code': 0, 'data': {'status': f['status']}})
 

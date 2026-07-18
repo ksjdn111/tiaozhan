@@ -41,8 +41,10 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     if (!ready) return
     fetchUnread()
-    const interval = setInterval(fetchUnread, 10000)
-    return () => clearInterval(interval)
+    const interval = setInterval(fetchUnread, 5000)
+    const onFocus = () => fetchUnread()
+    window.addEventListener('focus', onFocus)
+    return () => { clearInterval(interval); window.removeEventListener('focus', onFocus) }
   }, [ready, fetchUnread])
 
   if (!ready) return null

@@ -96,14 +96,12 @@ def get_detail(dc_id):
     item['comments'] = comments.data if comments.data else []
 
     # Check if current user is friends with the post author
-    friendship = supabase.from_('friends').select('status').or_(
-        f'requester_id.eq.{user_id},addressee_id.eq.{user_id}'
-    ).or_(
-        f'requester_id.eq.{item["user_id"]},addressee_id.eq.{item["user_id"]}'
-    ).execute()
     is_friend = False
-    for f in friendship.data:
-        ids = {f['requester_id'], f['addressee_id']}
+    friendship = supabase.from_('friends').select('requester_id, addressee_id, status').or_(
+        f'requester_id.eq.{user_id},addressee_id.eq.{user_id}'
+    ).execute()
+    for f in friendship.data or []:
+        ids = {str(f['requester_id']), str(f['addressee_id'])}
         if str(user_id) in ids and str(item['user_id']) in ids and f['status'] == 'accepted':
             is_friend = True
             break
