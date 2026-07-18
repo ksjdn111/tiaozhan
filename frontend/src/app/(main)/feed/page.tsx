@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import { Card, Button, Spin, Empty, Tag, message } from 'antd'
-import { HeartOutlined, HeartFilled } from '@ant-design/icons'
+import { HeartOutlined, HeartFilled, ThunderboltOutlined } from '@ant-design/icons'
 import { supabase } from '@/lib/supabase'
 
 const API = '/api'
 
-const difficultyColors: Record<number, string> = { 1: 'green', 2: 'cyan', 3: 'orange', 4: 'red', 5: 'purple' }
+const difficultyColors: Record<number, string> = { 1: '#52c41a', 2: '#13c2c2', 3: '#fa8c16', 4: '#f5222d', 5: '#722ed1' }
+const difficultyLabels: Record<number, string> = { 1: '简单', 2: '轻松', 3: '中等', 4: '困难', 5: '极限' }
 
 export default function FeedPage() {
   const [feed, setFeed] = useState<any[]>([])
@@ -59,35 +60,74 @@ export default function FeedPage() {
     }
   }
 
-  if (loading) return <div style={{ textAlign: 'center', paddingTop: 100 }}><Spin size="large" /></div>
-  if (error) return <Empty description={error} style={{ paddingTop: 100 }} />
-  if (feed.length === 0) return <Empty description="暂无动态" style={{ paddingTop: 100 }} />
+  if (loading) return (
+    <div style={{ padding: 16 }}>
+      <div className="skeleton" style={{ height: 24, width: '30%', marginBottom: 16 }} />
+      <div className="skeleton" style={{ height: 120, marginBottom: 12, borderRadius: 14 }} />
+      <div className="skeleton" style={{ height: 120, borderRadius: 14 }} />
+    </div>
+  )
+  if (error) return <Empty description={error} style={{ paddingTop: 80 }} />
+  if (feed.length === 0) return (
+    <div style={{ textAlign: 'center', paddingTop: 80 }}>
+      <div style={{ fontSize: 48, marginBottom: 12 }}>📭</div>
+      <p style={{ color: '#999' }}>暂无动态</p>
+      <p style={{ color: '#ccc', fontSize: 13 }}>去完成挑战，和大家分享吧！</p>
+    </div>
+  )
 
   return (
     <div style={{ padding: 16 }}>
-      <h2 style={{ marginBottom: 16 }}>挑战广场</h2>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+        <ThunderboltOutlined style={{ fontSize: 22, color: '#667eea' }} />
+        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>挑战广场</h2>
+      </div>
       {feed.map(item => (
-        <Card key={item.id} style={{ borderRadius: 12, marginBottom: 12 }} size="small">
+        <Card key={item.id} style={{
+          borderRadius: 14, marginBottom: 12,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+          border: 'none',
+        }} size="small" className="hover-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <span style={{ fontWeight: 600 }}>
-              {item.profile?.username || '匿名用户'}
-            </span>
-            <Tag color={difficultyColors[item.challenge?.difficulty] || 'default'}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {item.profile?.avatar_url ? (
+                <img src={item.profile.avatar_url} alt="avatar"
+                  style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />
+              ) : (
+                <div style={{
+                  width: 32, height: 32, borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#fff', fontSize: 14, fontWeight: 600,
+                }}>
+                  {(item.profile?.username || '?')[0]}
+                </div>
+              )}
+              <span style={{ fontWeight: 600, fontSize: 14 }}>
+                {item.profile?.username || '匿名用户'}
+              </span>
+            </div>
+            <Tag color={difficultyColors[item.challenge?.difficulty] || 'default'} style={{ borderRadius: 6 }}>
               {item.challenge?.category}
             </Tag>
           </div>
-          <h4>{item.challenge?.title}</h4>
-          {item.note && <p style={{ color: '#666', fontSize: 13 }}>{item.note}</p>}
+          <h4 style={{ margin: '0 0 4px', fontSize: 15 }}>{item.challenge?.title}</h4>
+          {item.note && <p style={{ color: '#666', fontSize: 13, margin: '4px 0', lineHeight: 1.5 }}>{item.note}</p>}
           {item.photo_url && (
-            <img src={item.photo_url} alt="challenge" style={{ width: '100%', borderRadius: 8, marginTop: 8 }} />
+            <img src={item.photo_url} alt="challenge"
+              style={{ width: '100%', borderRadius: 10, marginTop: 6, maxHeight: 240, objectFit: 'cover' }}
+            />
           )}
-          <div style={{ marginTop: 8 }}>
+          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center' }}>
             <Button
               type="text"
-              icon={item.liked_by_me ? <HeartFilled style={{ color: '#ff4d4f' }} /> : <HeartOutlined />}
+              icon={item.liked_by_me
+                ? <HeartFilled style={{ color: '#ff4d4f' }} />
+                : <HeartOutlined />}
               onClick={() => toggleLike(item.id)}
+              style={{ fontSize: 14 }}
             >
-              {item.like_count || 0}
+              <span style={{ marginLeft: 4 }}>{item.like_count || 0}</span>
             </Button>
           </div>
         </Card>
