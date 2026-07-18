@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Card, Button, Spin, Empty, Tag, message, Modal, Avatar } from 'antd'
+import { Card, Button, Spin, Empty, Tag, message, Modal, Avatar, Divider } from 'antd'
 import { HeartOutlined, HeartFilled, ThunderboltOutlined, MessageOutlined, UserAddOutlined, UserOutlined } from '@ant-design/icons'
 import { supabase } from '@/lib/supabase'
 
@@ -20,6 +20,7 @@ export default function FeedPage() {
   const [userProfile, setUserProfile] = useState<any>(null)
   const [userLoading, setUserLoading] = useState(false)
   const [friendStatus, setFriendStatus] = useState('')
+  const [userBadges, setUserBadges] = useState<any[]>([])
 
   const getToken = async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -71,18 +72,25 @@ export default function FeedPage() {
     setUserLoading(true)
     setUserModalOpen(true)
     setFriendStatus('')
+    setUserBadges([])
     const token = await getToken()
     const currentUserId = await getUserId()
-    if (userId === currentUserId) {
-      setFriendStatus('self')
+    const fetches: any[] = [
+      fetch(`${API}/auth/public-profile/${userId}`, { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(`${API}/badges/user/${userId}`, { headers: { Authorization: `Bearer ${token}` } }),
+    ]
+    if (userId !== currentUserId) {
+      fetches.push(fetch(`${API}/friends/check/${userId}`, { headers: { Authorization: `Bearer ${token}` } }))
     } else {
-      const [profileRes, friendRes] = await Promise.all([
-        fetch(`${API}/auth/public-profile/${userId}`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${API}/friends/check/${userId}`, { headers: { Authorization: `Bearer ${token}` } }),
-      ])
-      const pd = await profileRes.json()
+      setFriendStatus('self')
+    }
+    const [profileRes, badgesRes, friendRes] = await Promise.all(fetches)
+    const pd = await profileRes.json()
+    const bd = await badgesRes.json()
+    if (pd.code === 0) setUserProfile(pd.data)
+    if (bd.code === 0) setUserBadges(bd.data)
+    if (friendRes) {
       const fd = await friendRes.json()
-      if (pd.code === 0) setUserProfile(pd.data)
       if (fd.code === 0) setFriendStatus(fd.data.status)
     }
     setUserLoading(false)
@@ -180,8 +188,8 @@ export default function FeedPage() {
       ))}
 
       {/* User profile modal */}
-      <Modal open={userModalOpen} onCancel={() => { setUserModalOpen(false); setUserProfile(null) }} footer={null}
-        centered width={360}>
+      <Modal open={userModalOpen} onCancel={() => { setUserModalOpen(false); setUserProfile(null); setUserBadges([]) }} footer={null}
+        centered width={380}>
         {userLoading ? (
           <div style={{ padding: 32, textAlign: 'center' }}><Spin /></div>
         ) : userProfile && (
@@ -194,15 +202,27 @@ export default function FeedPage() {
               </div>
             )}
             <h3 style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 700 }}>{userProfile.username}</h3>
-            <p style={{ color: '#888', fontSize: 13, margin: '0 0 16px', minHeight: 20 }}>{userProfile.bio || '暂无简介'}</p>
+            <p style={{ color: '#888', fontSize: 13, margin: '0 0 12px', minHeight: 20 }}>{userProfile.bio || '暂无简介'}</p>
             {friendStatus !== 'self' && (
-              <Button type="primary" icon={<UserAddOutlined />}
+              <Button type="primary" size="small" icon={<UserAddOutlined />}
                 onClick={() => handleAddFriend(userProfile.id)}
                 disabled={friendStatus === 'accepted' || friendStatus === 'pending'}
-                style={{ borderRadius: 10, border: 'none' }}>
+                style={{ borderRadius: 8, border: 'none', marginBottom: 12 }}>
                 {friendStatus === 'accepted' ? '已是好友' : friendStatus === 'pending' ? '已发送请求' : '添加好友'}
               </Button>
             )}
+            <Divider style={{ margin: '4px 0' }} />
+            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8, marginTop: 8, color: '#666' }}>成就徽章</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center' }}>
+              {userBadges.length === 0 ? (
+                <span style={{ fontSize: 12, color: '#ccc' }}>暂无徽章</span>
+              ) : userBadges.map((b: any) => (
+                <div key={b.id} style={{ textAlign: 'center', width: 64, opacity: b.earned ? 1 : 0.35, filter: b.earned ? 'none' : 'grayscale(0.8)' }}>
+                  <div style={{ fontSize: 28, marginBottom: 2 }}>{b.icon}</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: b.earned ? '#333' : '#999' }}>{b.name}</div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </Modal>

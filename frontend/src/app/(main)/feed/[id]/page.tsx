@@ -26,6 +26,7 @@ export default function FeedDetailPage() {
   const [userProfile, setUserProfile] = useState<any>(null)
   const [userBadges, setUserBadges] = useState<any[]>([])
   const [userLoading, setUserLoading] = useState(false)
+  const [friendStatus, setFriendStatus] = useState('')
 
   const getToken = async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -81,16 +82,26 @@ export default function FeedDetailPage() {
 
   const openUserProfile = async (userId: string) => {
     const currentUserId = await getUserId()
-    setUserLoading(true); setUserModalOpen(true)
+    setUserLoading(true); setUserModalOpen(true); setFriendStatus('')
     const token = await getToken()
-    const [profileRes, badgesRes] = await Promise.all([
+    const fetches: any[] = [
       fetch(`${API}/auth/public-profile/${userId}`, { headers: { Authorization: `Bearer ${token}` } }),
       fetch(`${API}/badges/user/${userId}`, { headers: { Authorization: `Bearer ${token}` } }),
-    ])
+    ]
+    if (userId !== currentUserId) {
+      fetches.push(fetch(`${API}/friends/check/${userId}`, { headers: { Authorization: `Bearer ${token}` } }))
+    } else {
+      setFriendStatus('self')
+    }
+    const [profileRes, badgesRes, friendRes] = await Promise.all(fetches)
     const pd = await profileRes.json()
     const bd = await badgesRes.json()
     if (pd.code === 0) setUserProfile(pd.data)
     if (bd.code === 0) setUserBadges(bd.data)
+    if (friendRes) {
+      const fd = await friendRes.json()
+      if (fd.code === 0) setFriendStatus(fd.data.status)
+    }
     setUserLoading(false)
   }
 
@@ -102,7 +113,8 @@ export default function FeedDetailPage() {
       body: JSON.stringify({ target_user_id: targetId })
     })
     const data = await res.json()
-    message.success('好友请求已发送')
+    if (data.code === 0) { message.success('好友请求已发送'); setFriendStatus('pending') }
+    else message.error(data.message || '操作失败')
   }
 
   if (loading) return <div style={{ padding: 16, textAlign: 'center', marginTop: 40 }}><Spin size="large" /></div>
@@ -253,7 +265,16 @@ export default function FeedDetailPage() {
               </div>
             )}
             <h3 style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 700 }}>{userProfile.username}</h3>
-            <p style={{ color: '#888', fontSize: 13, margin: '0 0 16px', minHeight: 20 }}>{userProfile.bio || '暂无简介'}</p>
+            <p style={{ color: '#888', fontSize: 13, margin: '0 0 12px', minHeight: 20 }}>{userProfile.bio || '暂无简介'}</p>
+
+            {friendStatus && friendStatus !== 'self' && (
+              <Button type="primary" size="small" icon={<UserAddOutlined />}
+                onClick={() => handleAddFriend(userProfile.id)}
+                disabled={friendStatus === 'accepted' || friendStatus === 'pending'}
+                style={{ borderRadius: 8, border: 'none', marginBottom: 12 }}>
+                {friendStatus === 'accepted' ? '已是好友' : friendStatus === 'pending' ? '已发送请求' : '添加好友'}
+              </Button>
+            )}
 
             {/* Badges */}
             <Divider style={{ margin: '8px 0' }} />
