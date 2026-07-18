@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from services.supabase_client import get_supabase
+from services.supabase_client import get_auth_supabase
 from utils.auth import get_current_user
 
 auth_bp = Blueprint('auth', __name__)
@@ -14,7 +14,7 @@ def register():
     if not all([email, password, username]):
         return jsonify({'code': 1, 'message': '缺少必填字段'}), 400
 
-    supabase = get_supabase()
+    supabase = get_auth_supabase()
     auth_res = supabase.auth.sign_up({'email': email, 'password': password})
     if auth_res.user is None:
         return jsonify({'code': 1, 'message': '注册失败'}), 400
@@ -36,7 +36,7 @@ def login():
     if not all([email, password]):
         return jsonify({'code': 1, 'message': '缺少必填字段'}), 400
 
-    supabase = get_supabase()
+    supabase = get_auth_supabase()
     auth_res = supabase.auth.sign_in_with_password({'email': email, 'password': password})
     if auth_res.user is None:
         return jsonify({'code': 1, 'message': '邮箱或密码错误'}), 401
@@ -56,7 +56,7 @@ def get_profile():
     if not user_id:
         return jsonify({'code': 1, 'message': '未授权'}), 401
 
-    supabase = get_supabase()
+    supabase = get_auth_supabase()
     profile = supabase.from_('profiles').select('*').eq('id', user_id).single().execute()
     return jsonify({'code': 0, 'data': profile.data})
 
@@ -73,6 +73,6 @@ def update_profile():
     if 'avatar_url' in data:
         update_data['avatar_url'] = data['avatar_url']
 
-    supabase = get_supabase()
+    supabase = get_auth_supabase()
     supabase.from_('profiles').update(update_data).eq('id', user_id).execute()
     return jsonify({'code': 0, 'message': '更新成功'})

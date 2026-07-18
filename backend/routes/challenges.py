@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from datetime import date, timedelta
-from services.supabase_client import get_supabase
+from services.supabase_client import get_auth_supabase
 from utils.auth import get_current_user
 
 challenges_bp = Blueprint('challenges', __name__)
@@ -11,7 +11,7 @@ def get_today_challenge():
     if not user_id:
         return jsonify({'code': 1, 'message': '未授权'}), 401
 
-    supabase = get_supabase()
+    supabase = get_auth_supabase()
     today = date.today().isoformat()
 
     existing = supabase.from_('daily_challenges').select(
@@ -61,7 +61,7 @@ def complete_challenge():
     note = data.get('note', '')
     photo_url = data.get('photo_url', '')
 
-    supabase = get_supabase()
+    supabase = get_auth_supabase()
     update = {'status': 'done'}
     if note:
         update['note'] = note
@@ -83,7 +83,7 @@ def skip_challenge():
     data = request.get_json()
     dc_id = data.get('daily_challenge_id')
 
-    supabase = get_supabase()
+    supabase = get_auth_supabase()
     supabase.from_('daily_challenges').update({'status': 'skipped'}).eq(
         'id', dc_id
     ).eq('user_id', user_id).execute()
@@ -99,7 +99,7 @@ def get_history():
     page = request.args.get('page', 1, type=int)
     size = request.args.get('size', 20, type=int)
 
-    supabase = get_supabase()
+    supabase = get_auth_supabase()
     offset = (page - 1) * size
     result = supabase.from_('daily_challenges').select(
         '*, challenge:challenge_id(*)'

@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from services.supabase_client import get_supabase
+from services.supabase_client import get_auth_supabase
 from utils.auth import get_current_user
 
 feed_bp = Blueprint('feed', __name__)
@@ -13,7 +13,7 @@ def get_feed():
     page = request.args.get('page', 1, type=int)
     size = request.args.get('size', 20, type=int)
 
-    supabase = get_supabase()
+    supabase = get_auth_supabase()
     offset = (page - 1) * size
     result = supabase.from_('daily_challenges').select(
         '*, challenge:challenge_id(*), profile:user_id(username, avatar_url), likes:likes(count)'
@@ -37,7 +37,7 @@ def toggle_like():
     data = request.get_json()
     dc_id = data.get('daily_challenge_id')
 
-    supabase = get_supabase()
+    supabase = get_auth_supabase()
     existing = supabase.from_('likes').select('id').eq(
         'user_id', user_id
     ).eq('daily_challenge_id', dc_id).execute()

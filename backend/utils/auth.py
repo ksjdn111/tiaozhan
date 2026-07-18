@@ -1,4 +1,4 @@
-from flask import request
+from flask import request, g
 import jwt as pyjwt
 
 def get_current_user() -> str | None:
@@ -7,6 +7,9 @@ def get_current_user() -> str | None:
         return None
     try:
         payload = pyjwt.decode(token, options={"verify_signature": False})
-        return payload.get('sub')
+        user_id = payload.get('sub')
+        if user_id:
+            g.jwt_token = token
+        return user_id
     except Exception:
         return None
