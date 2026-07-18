@@ -145,5 +145,62 @@ INSERT INTO challenges (title, description, category, difficulty) VALUES
   ('做一件好事', '帮助一个身边的人', '生活', 1),
   ('写一份感恩清单', '写下5件今天值得感恩的事', '生活', 1),
   ('整理手机相册', '清理手机里不需要的照片', '生活', 1),
-  ('计划下周目标', '制定下周的三个小目标', '生活', 2)
+   ('计划下周目标', '制定下周的三个小目标', '生活', 2)
 ON CONFLICT DO NOTHING;
+
+-- ========== 新增功能：自定义挑战、评论、好友、聊天 ==========
+
+-- profiles 加 bio 字段
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT '';
+
+-- challenges 加 creator_id（NULL = 系统挑战）
+ALTER TABLE challenges ADD COLUMN IF NOT EXISTS creator_id UUID REFERENCES profiles(id) ON DELETE SET NULL;
+
+-- 评论表
+CREATE TABLE IF NOT EXISTS comments (
+  id SERIAL PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  daily_challenge_id INTEGER NOT NULL REFERENCES daily_challenges(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_comments_dc ON comments(daily_challenge_id);
+
+ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "comments_select" ON comments FOR SELECT USING (true);
+CREATE POLICY "comments_insert" ON comments FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "comments_delete" ON comments FOR DELETE USING (auth.uid() = user_id);
+
+-- 好友关系表
+CREATE TABLE IF NOT EXISTS friends (
+  id SERIAL PRIMARY KEY,
+  requester_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  addressee_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(requester_id, addressee_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_friends_user ON friends(requester_id);
+CREATE INDEX IF NOT EXISTS idx_friends_addressee ON friends(addressee_id);
+
+ALTER TABLE friends ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "friends_select" ON friends FOR SELECT USING (auth.uid() = requester_id OR auth.uid() = addressee_id);
+CREATE POLICY "friends_insert" ON friends FOR INSERT WITH CHECK (auth.uid() = requester_id);
+CREATE POLICY "friends_update" ON friends FOR UPDATE USING (auth.uid() = requester_id OR auth.uid() = addressee_id);
+
+-- 私信表
+CREATE TABLE IF NOT EXISTS messages (
+  id SERIAL PRIMARY KEY,
+  sender_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  receiver_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_participants ON messages(sender_id, receiver_id);
+
+ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "messages_select" ON messages FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
+CREATE POLICY "messages_insert" ON messages FOR INSERT WITH CHECK (auth.uid() = sender_id);
