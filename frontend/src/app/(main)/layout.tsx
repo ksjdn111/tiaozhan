@@ -2,13 +2,14 @@
 
 import { usePathname, useRouter } from 'next/navigation'
 import { Tabs, TabsProps } from 'antd'
-import { HomeOutlined, AppstoreOutlined, UserOutlined, FireOutlined } from '@ant-design/icons'
+import { HomeOutlined, AppstoreOutlined, UserOutlined, TeamOutlined } from '@ant-design/icons'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
 const tabItems: TabsProps['items'] = [
   { key: '/dashboard', label: '今日', icon: <HomeOutlined /> },
   { key: '/feed', label: '广场', icon: <AppstoreOutlined /> },
+  { key: '/friends', label: '朋友', icon: <TeamOutlined /> },
   { key: '/profile', label: '我的', icon: <UserOutlined /> },
 ]
 
