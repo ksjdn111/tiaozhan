@@ -14,28 +14,26 @@ def get_today_challenge():
     supabase = get_auth_supabase()
     today = date.today().isoformat()
 
-    existing = supabase.from_('daily_challenges').select(
+    # 1. Return pending challenge for today if exists
+    pending = supabase.from_('daily_challenges').select(
         '*, challenge:challenge_id(*)'
-    ).eq('user_id', user_id).eq('date', today).execute()
+    ).eq('user_id', user_id).eq('date', today).eq('status', 'pending').execute()
 
-    if existing.data:
-        return jsonify({'code': 0, 'data': existing.data[0]})
+    if pending.data:
+        return jsonify({'code': 0, 'data': pending.data[0]})
 
-    completed_ids = supabase.from_('daily_challenges').select(
+    # 2. Get all challenge IDs this user has ever used
+    used = supabase.from_('daily_challenges').select(
         'challenge_id'
     ).eq('user_id', user_id).execute()
-    used_ids = [c['challenge_id'] for c in completed_ids.data]
+    used_ids = list(set(c['challenge_id'] for c in used.data))
 
-    query = supabase.from_('challenges').select('*').limit(10)
-    if used_ids:
-        for uid in used_ids:
-            query = query.neq('id', uid)
-    all_challenges = query.execute()
+    # 3. Pick a random unused challenge
+    all_challenges = supabase.from_('challenges').select('*').execute().data
+    available = [c for c in all_challenges if c['id'] not in used_ids]
 
     import random
-    chosen = random.choice(all_challenges.data) if all_challenges.data else random.choice(
-        supabase.from_('challenges').select('*').execute().data
-    )
+    chosen = random.choice(available) if available else random.choice(all_challenges)
 
     dc = supabase.from_('daily_challenges').insert({
         'user_id': user_id,

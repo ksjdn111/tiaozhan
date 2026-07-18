@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Card, Button, Spin, Tag, Input, message, Empty } from 'antd'
-import { CheckCircleOutlined, CloseCircleOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import { Card, Button, Spin, Tag, Input, message, Empty, Upload } from 'antd'
+import { CheckCircleOutlined, CloseCircleOutlined, ThunderboltOutlined, PlusOutlined } from '@ant-design/icons'
 import { supabase } from '@/lib/supabase'
 
 const API = '/api'
@@ -18,6 +18,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [note, setNote] = useState('')
+  const [photoUrl, setPhotoUrl] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
 
   const getToken = async () => {
@@ -25,7 +26,16 @@ export default function DashboardPage() {
     return session?.access_token || ''
   }
 
+  const getUserId = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    return session?.user?.id || ''
+  }
+
   const fetchToday = async () => {
+    setLoading(true)
+    setError('')
+    setNote('')
+    setPhotoUrl('')
     try {
       const token = await getToken()
       if (!token) { setError('未登录，请重新登录'); setLoading(false); return }
@@ -43,13 +53,37 @@ export default function DashboardPage() {
 
   useEffect(() => { fetchToday() }, [])
 
+  const handlePhotoUpload = async (file: File) => {
+    const userId = await getUserId()
+    const ext = file.name.split('.').pop()
+    const filePath = `proofs/${userId}/${Date.now()}.${ext}`
+
+    const { error: uploadError } = await supabase.storage
+      .from('proofs')
+      .upload(filePath, file, { upsert: true })
+
+    if (uploadError) {
+      message.error('图片上传失败')
+      return
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('proofs')
+      .getPublicUrl(filePath)
+
+    setPhotoUrl(publicUrl)
+    message.success('图片已上传')
+  }
+
   const handleComplete = async () => {
     setActionLoading(true)
     const token = await getToken()
+    const body: any = { daily_challenge_id: challenge.id, note }
+    if (photoUrl) body.photo_url = photoUrl
     await fetch(`${API}/challenge/complete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ daily_challenge_id: challenge.id, note })
+      body: JSON.stringify(body)
     })
     message.success('挑战完成！')
     setChallenge({ ...challenge, status: 'done' })
@@ -97,6 +131,22 @@ export default function DashboardPage() {
               onChange={e => setNote(e.target.value)}
               style={{ marginTop: 12 }}
             />
+            <div style={{ marginTop: 12 }}>
+              <Upload
+                showUploadList={false}
+                beforeUpload={(file) => { handlePhotoUpload(file); return false }}
+                accept="image/*"
+              >
+                <Button icon={<PlusOutlined />}>
+                  {photoUrl ? '已上传图片' : '上传图片证明（选填）'}
+                </Button>
+              </Upload>
+              {photoUrl && (
+                <div style={{ marginTop: 8 }}>
+                  <img src={photoUrl} alt="proof" style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 8 }} />
+                </div>
+              )}
+            </div>
             <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
               <Button type="primary" icon={<CheckCircleOutlined />} loading={actionLoading} onClick={handleComplete} block size="large">
                 完成挑战
@@ -112,6 +162,9 @@ export default function DashboardPage() {
           <div style={{ textAlign: 'center', padding: 16 }}>
             <CheckCircleOutlined style={{ fontSize: 48, color: '#52c41a' }} />
             <p style={{ color: '#52c41a', fontSize: 16, marginTop: 8 }}>已完成！</p>
+            <Button icon={<ThunderboltOutlined />} onClick={fetchToday} style={{ marginTop: 8 }}>
+              再来一个
+            </Button>
           </div>
         )}
 
