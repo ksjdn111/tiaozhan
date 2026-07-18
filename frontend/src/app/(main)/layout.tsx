@@ -41,10 +41,12 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     if (!ready) return
     fetchUnread()
-    const interval = setInterval(fetchUnread, 5000)
-    const onFocus = () => fetchUnread()
-    window.addEventListener('focus', onFocus)
-    return () => { clearInterval(interval); window.removeEventListener('focus', onFocus) }
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchUnread()
+    }, 30000)
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchUnread() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { clearInterval(interval); document.removeEventListener('visibilitychange', onVisible) }
   }, [ready, fetchUnread])
 
   if (!ready) return null
