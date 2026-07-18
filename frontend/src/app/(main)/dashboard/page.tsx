@@ -1,16 +1,20 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Card, Button, Spin, Tag, Input, message, Empty, Upload } from 'antd'
-import { CheckCircleOutlined, CloseCircleOutlined, ThunderboltOutlined, PlusOutlined } from '@ant-design/icons'
+import { Card, Button, Spin, Tag, Input, message, Empty, Upload, Progress, Modal } from 'antd'
+import { CheckCircleOutlined, CloseCircleOutlined, ThunderboltOutlined, PlusOutlined, FireOutlined, TrophyOutlined } from '@ant-design/icons'
 import { supabase } from '@/lib/supabase'
 
 const API = '/api'
 
-const difficultyColors: Record<number, string> = { 1: 'green', 2: 'cyan', 3: 'orange', 4: 'red', 5: 'purple' }
+const difficultyColors: Record<number, string> = { 1: '#52c41a', 2: '#13c2c2', 3: '#fa8c16', 4: '#f5222d', 5: '#722ed1' }
+const difficultyLabels: Record<number, string> = { 1: '简单', 2: '轻松', 3: '中等', 4: '困难', 5: '极限' }
 
 const categoryIcons: Record<string, string> = {
   '运动': '🏃', '美食': '🍳', '学习': '📚', '创意': '🎨', '生活': '🏠'
+}
+const categoryColors: Record<string, string> = {
+  '运动': '#e6f7ff', '美食': '#fff7e6', '学习': '#f0f5ff', '创意': '#f9f0ff', '生活': '#e6fffb'
 }
 
 export default function DashboardPage() {
@@ -20,6 +24,8 @@ export default function DashboardPage() {
   const [note, setNote] = useState('')
   const [photoUrl, setPhotoUrl] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
+  const [streak, setStreak] = useState(0)
+  const [newBadges, setNewBadges] = useState<any[]>([])
 
   const getToken = async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -39,12 +45,15 @@ export default function DashboardPage() {
     try {
       const token = await getToken()
       if (!token) { setError('未登录，请重新登录'); setLoading(false); return }
-      const res = await fetch(`${API}/challenge/today`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      const data = await res.json()
-      if (data.code === 0) { setChallenge(data.data); setError('') }
-      else { setError(data.message || '获取挑战失败') }
+      const [challengeRes, statsRes] = await Promise.all([
+        fetch(`${API}/challenge/today`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API}/badges/stats`, { headers: { Authorization: `Bearer ${token}` } }),
+      ])
+      const challengeData = await challengeRes.json()
+      const statsData = await statsRes.json()
+      if (challengeData.code === 0) { setChallenge(challengeData.data); setError('') }
+      else { setError(challengeData.message || '获取挑战失败') }
+      if (statsData.code === 0) setStreak(statsData.data.total_days || 0)
     } catch {
       setError('网络错误，请确认后端服务已启动')
     }
@@ -57,20 +66,9 @@ export default function DashboardPage() {
     const userId = await getUserId()
     const ext = file.name.split('.').pop()
     const filePath = `proofs/${userId}/${Date.now()}.${ext}`
-
-    const { error: uploadError } = await supabase.storage
-      .from('proofs')
-      .upload(filePath, file, { upsert: true })
-
-    if (uploadError) {
-      message.error('图片上传失败')
-      return
-    }
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('proofs')
-      .getPublicUrl(filePath)
-
+    const { error: uploadError } = await supabase.storage.from('proofs').upload(filePath, file, { upsert: true })
+    if (uploadError) { message.error('图片上传失败'); return }
+    const { data: { publicUrl } } = supabase.storage.from('proofs').getPublicUrl(filePath)
     setPhotoUrl(publicUrl)
     message.success('图片已上传')
   }
@@ -80,11 +78,15 @@ export default function DashboardPage() {
     const token = await getToken()
     const body: any = { daily_challenge_id: challenge.id, note }
     if (photoUrl) body.photo_url = photoUrl
-    await fetch(`${API}/challenge/complete`, {
+    const res = await fetch(`${API}/challenge/complete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(body)
     })
+    const data = await res.json()
+    if (data.new_badges && data.new_badges.length > 0) {
+      setNewBadges(data.new_badges)
+    }
     message.success('挑战完成！')
     setChallenge({ ...challenge, status: 'done' })
     setActionLoading(false)
@@ -103,24 +105,54 @@ export default function DashboardPage() {
     setActionLoading(false)
   }
 
-  if (loading) return <div style={{ textAlign: 'center', paddingTop: 100 }}><Spin size="large" /></div>
-  if (error) return <Empty description={error} />
-  if (!challenge) return <Empty description="暂无挑战" />
+  if (loading) return (
+    <div style={{ padding: 16, marginTop: 16 }}>
+      <div className="skeleton" style={{ height: 24, width: '40%', margin: '0 auto 16px' }} />
+      <div className="skeleton" style={{ height: 200, borderRadius: 14 }} />
+    </div>
+  )
+  if (error) return <Empty description={error} style={{ paddingTop: 80 }} />
+  if (!challenge) return <Empty description="暂无挑战" style={{ paddingTop: 80 }} />
 
   const c = challenge.challenge
 
   return (
     <div style={{ padding: 16 }}>
-      <Card style={{ borderRadius: 12, marginTop: 16 }}>
-        <div style={{ textAlign: 'center', marginBottom: 16 }}>
-          <span style={{ fontSize: 48 }}>{categoryIcons[c.category] || '🎯'}</span>
-          <h2 style={{ margin: '8px 0' }}>{c.title}</h2>
-          <Tag color={difficultyColors[c.difficulty] || 'default'}>
-            {'⭐'.repeat(c.difficulty)}
-          </Tag>
-          <Tag>{c.category}</Tag>
+      {/* Streak bar */}
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        marginBottom: 16, padding: '10px 16px', background: 'linear-gradient(135deg, #fff7e6, #ffe7ba)',
+        borderRadius: 12,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <FireOutlined style={{ fontSize: 20, color: '#fa8c16' }} />
+          <span style={{ fontWeight: 600, color: '#d46b08' }}>已连续 {streak} 天</span>
         </div>
-        <p style={{ fontSize: 15, color: '#666', lineHeight: 1.6 }}>{c.description}</p>
+        <TrophyOutlined style={{ fontSize: 20, color: '#faad14' }} />
+      </div>
+
+      {/* Challenge card */}
+      <Card style={{
+        borderRadius: 16, overflow: 'hidden',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
+        border: 'none',
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: 16 }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: 16,
+            background: categoryColors[c.category] || '#f0f0f0',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 12px', fontSize: 32,
+          }}>
+            {categoryIcons[c.category] || '🎯'}
+          </div>
+          <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 700 }}>{c.title}</h2>
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+            <Tag color={difficultyColors[c.difficulty]}>{difficultyLabels[c.difficulty]}</Tag>
+            <Tag style={{ background: categoryColors[c.category] || '#f0f0f0', border: 'none', color: '#666' }}>{c.category}</Tag>
+          </div>
+        </div>
+        <p style={{ fontSize: 14, color: '#666', lineHeight: 1.7, margin: 0, textAlign: 'center' }}>{c.description}</p>
 
         {challenge.status === 'pending' && (
           <>
@@ -129,7 +161,7 @@ export default function DashboardPage() {
               placeholder="记录你的完成感受（选填）"
               value={note}
               onChange={e => setNote(e.target.value)}
-              style={{ marginTop: 12 }}
+              style={{ marginTop: 16, borderRadius: 10, borderColor: '#e8e8e8' }}
             />
             <div style={{ marginTop: 12 }}>
               <Upload
@@ -137,21 +169,32 @@ export default function DashboardPage() {
                 beforeUpload={(file) => { handlePhotoUpload(file); return false }}
                 accept="image/*"
               >
-                <Button icon={<PlusOutlined />}>
-                  {photoUrl ? '已上传图片' : '上传图片证明（选填）'}
+                <Button icon={<PlusOutlined />} style={{ borderRadius: 10 }}>
+                  {photoUrl ? '✅ 已上传图片' : '📷 添加图片证明'}
                 </Button>
               </Upload>
               {photoUrl && (
-                <div style={{ marginTop: 8 }}>
-                  <img src={photoUrl} alt="proof" style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 8 }} />
-                </div>
+                <img src={photoUrl} alt="proof" style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 10, marginTop: 8 }} />
               )}
             </div>
-            <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
-              <Button type="primary" icon={<CheckCircleOutlined />} loading={actionLoading} onClick={handleComplete} block size="large">
+            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              <Button
+                type="primary"
+                icon={<CheckCircleOutlined />}
+                loading={actionLoading}
+                onClick={handleComplete}
+                block size="large"
+                style={{ height: 48, borderRadius: 12, fontSize: 16, border: 'none' }}
+              >
                 完成挑战
               </Button>
-              <Button icon={<CloseCircleOutlined />} loading={actionLoading} onClick={handleSkip} size="large">
+              <Button
+                icon={<CloseCircleOutlined />}
+                loading={actionLoading}
+                onClick={handleSkip}
+                size="large"
+                style={{ height: 48, borderRadius: 12, fontSize: 16 }}
+              >
                 跳过
               </Button>
             </div>
@@ -159,23 +202,73 @@ export default function DashboardPage() {
         )}
 
         {challenge.status === 'done' && (
-          <div style={{ textAlign: 'center', padding: 16 }}>
-            <CheckCircleOutlined style={{ fontSize: 48, color: '#52c41a' }} />
-            <p style={{ color: '#52c41a', fontSize: 16, marginTop: 8 }}>已完成！</p>
-            <Button icon={<ThunderboltOutlined />} onClick={fetchToday} style={{ marginTop: 8 }}>
+          <div style={{ textAlign: 'center', padding: '24px 0 8px' }}>
+            <div style={{
+              width: 64, height: 64, borderRadius: '50%',
+              background: '#f6ffed', display: 'flex',
+              alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 12px',
+            }}>
+              <CheckCircleOutlined style={{ fontSize: 36, color: '#52c41a' }} />
+            </div>
+            <p style={{ color: '#52c41a', fontSize: 18, fontWeight: 600, margin: '0 0 16px' }}>已完成！</p>
+            <Button
+              icon={<ThunderboltOutlined />}
+              onClick={fetchToday}
+              size="large"
+              style={{ borderRadius: 10, height: 44, minWidth: 160 }}
+            >
               再来一个
             </Button>
           </div>
         )}
 
         {challenge.status === 'skipped' && (
-          <div style={{ textAlign: 'center', padding: 16 }}>
-            <CloseCircleOutlined style={{ fontSize: 48, color: '#999' }} />
-            <p style={{ color: '#999', fontSize: 16, marginTop: 8 }}>已跳过</p>
-            <Button icon={<ThunderboltOutlined />} onClick={fetchToday}>换一个挑战</Button>
+          <div style={{ textAlign: 'center', padding: '24px 0 8px' }}>
+            <div style={{
+              width: 64, height: 64, borderRadius: '50%',
+              background: '#f5f5f5', display: 'flex',
+              alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 12px',
+            }}>
+              <CloseCircleOutlined style={{ fontSize: 36, color: '#999' }} />
+            </div>
+            <p style={{ color: '#999', fontSize: 18, fontWeight: 600, margin: '0 0 16px' }}>已跳过</p>
+            <Button
+              icon={<ThunderboltOutlined />}
+              onClick={fetchToday}
+              size="large"
+              style={{ borderRadius: 10, height: 44, minWidth: 160 }}
+            >
+              换一个挑战
+            </Button>
           </div>
         )}
       </Card>
+      {/* Badge unlock modal */}
+      <Modal
+        open={newBadges.length > 0}
+        onCancel={() => setNewBadges([])}
+        footer={null}
+        centered
+        width={320}
+        closable={false}
+      >
+        <div style={{ textAlign: 'center', padding: '8px 0' }}>
+          <TrophyOutlined style={{ fontSize: 48, color: '#faad14' }} />
+          <h3 style={{ margin: '12px 0 4px', fontSize: 20, fontWeight: 700, color: '#faad14' }}>🏆 解锁新成就！</h3>
+          {newBadges.map((b: any) => (
+            <div key={b.id} style={{ margin: '16px 0' }}>
+              <div style={{ fontSize: 48 }}>{b.icon}</div>
+              <div style={{ fontSize: 18, fontWeight: 600, marginTop: 8 }}>{b.name}</div>
+              <div style={{ fontSize: 13, color: '#666', marginTop: 4 }}>{b.description}</div>
+            </div>
+          ))}
+          <Button type="primary" onClick={() => setNewBadges([])} style={{ marginTop: 8, borderRadius: 10, height: 40, minWidth: 120 }}>
+            太棒了！
+          </Button>
+        </div>
+      </Modal>
     </div>
   )
 }
