@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, Form, Input, Button, Tabs, Progress, message } from 'antd'
-import { UserOutlined, LockOutlined, MailOutlined, CheckCircleFilled, CloseCircleFilled } from '@ant-design/icons'
+import { UserOutlined, LockOutlined, MailOutlined, CheckCircleFilled, CloseCircleFilled, ThunderboltOutlined } from '@ant-design/icons'
 import { supabase } from '@/lib/supabase'
 
 const API = '/api'
@@ -60,18 +60,11 @@ function StrengthBar({ pwd }: { pwd: string }) {
 
 function translateError(msg: string, map: Record<string, string> = authErrors): string {
   const rateMatch = msg.match(/only request this after (\d+)/)
-  if (rateMatch) {
-    return `操作太频繁，请 ${rateMatch[1]} 秒后再试`
-  }
+  if (rateMatch) return `操作太频繁，请 ${rateMatch[1]} 秒后再试`
   for (const [key, val] of Object.entries(map)) {
     if (msg.includes(key)) return val
   }
   return msg
-}
-
-const profileErrors: Record<string, string> = {
-  'duplicate key value violates unique constraint "profiles_username_key"': '用户名已被使用',
-  'duplicate key value violates unique constraint "profiles_pkey"': '该邮箱已注册',
 }
 
 export default function LoginPage() {
@@ -91,9 +84,7 @@ export default function LoginPage() {
     const pending = localStorage.getItem('pending_username')
     if (pending) {
       localStorage.removeItem('pending_username')
-      await supabase.from('profiles')
-        .update({ username: pending })
-        .eq('id', data.user.id)
+      await supabase.from('profiles').update({ username: pending }).eq('id', data.user.id)
     }
     setLoading(false)
     message.success('登录成功')
@@ -132,23 +123,45 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#f0f2f5' }}>
-      <Card style={{ width: 420, borderRadius: 12 }}>
-        <h2 style={{ textAlign: 'center', marginBottom: 8, color: '#409EFF' }}>随机挑战生成器</h2>
-        <p style={{ textAlign: 'center', color: '#999', marginBottom: 24 }}>完成每日挑战，成为更好的自己</p>
+    <div style={{
+      display: 'flex', justifyContent: 'center', alignItems: 'center',
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      padding: 16,
+    }}>
+      <Card style={{
+        width: '100%', maxWidth: 400, borderRadius: 20,
+        boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+        overflow: 'hidden',
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: 8 }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: 16,
+            background: 'linear-gradient(135deg, #667eea, #764ba2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 12px',
+          }}>
+            <ThunderboltOutlined style={{ fontSize: 28, color: '#fff' }} />
+          </div>
+          <h2 className="gradient-text" style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>随机挑战生成器</h2>
+          <p style={{ color: '#999', fontSize: 13, marginTop: 4 }}>完成每日挑战，成为更好的自己</p>
+        </div>
         <Tabs centered items={[
           {
             key: 'login',
             label: '登录',
             children: (
-              <Form onFinish={handleLogin} size="large">
+              <Form onFinish={handleLogin} size="large" style={{ marginTop: 8 }}>
                 <Form.Item name="email" rules={[{ required: true, message: '请输入邮箱' }]}>
                   <Input prefix={<MailOutlined />} placeholder="邮箱" />
                 </Form.Item>
                 <Form.Item name="password" rules={[{ required: true, message: '请输入密码' }]}>
                   <Input.Password prefix={<LockOutlined />} placeholder="密码" />
                 </Form.Item>
-                <Button type="primary" htmlType="submit" loading={loading} block>登录</Button>
+                <Button type="primary" htmlType="submit" loading={loading} block size="large"
+                  style={{ height: 48, borderRadius: 12, fontSize: 16 }}>
+                  登录
+                </Button>
               </Form>
             )
           },
@@ -156,12 +169,12 @@ export default function LoginPage() {
             key: 'register',
             label: '注册',
             children: (
-              <Form form={form} onFinish={handleRegister} size="large">
+              <Form form={form} onFinish={handleRegister} size="large" style={{ marginTop: 8 }}>
                 <Form.Item name="username" rules={[
                   { required: true, message: '请输入用户名' },
                   { min: 3, message: '用户名至少 3 个字符' },
                   { max: 20, message: '用户名最多 20 个字符' },
-                  { pattern: /^[a-zA-Z0-9_\u4e00-\u9fa5]+$/, message: '用户名只能包含字母、数字、下划线和中文' },
+                  { pattern: /^[a-zA-Z0-9_\u4e00-\u9fa5]+$/, message: '只能包含字母、数字、下划线和中文' },
                 ]}>
                   <Input prefix={<UserOutlined />} placeholder="用户名" maxLength={20} />
                 </Form.Item>
@@ -171,28 +184,16 @@ export default function LoginPage() {
                 ]}>
                   <Input prefix={<MailOutlined />} placeholder="邮箱" />
                 </Form.Item>
-                <Form.Item
-                  name="password"
-                  rules={[
-                    { required: true, message: '请输入密码' },
-                    { max: 64, message: '密码最多 64 个字符' },
-                  ]}
-                >
-                  <Input.Password
-                    prefix={<LockOutlined />}
-                    placeholder="密码"
-                    maxLength={64}
-                    onChange={e => setRegPwd(e.target.value)}
-                  />
+                <Form.Item name="password" rules={[
+                  { required: true, message: '请输入密码' },
+                  { max: 64, message: '密码最多 64 个字符' },
+                ]}>
+                  <Input.Password prefix={<LockOutlined />} placeholder="密码" maxLength={64} onChange={e => setRegPwd(e.target.value)} />
                 </Form.Item>
                 <StrengthBar pwd={regPwd} />
-                <Button
-                  type="primary"
-                  htmlType="submit"
-                  loading={loading}
-                  block
-                  disabled={regPwd ? checkPasswordStrength(regPwd).score < 100 : true}
-                >
+                <Button type="primary" htmlType="submit" loading={loading} block size="large"
+                  style={{ height: 48, borderRadius: 12, fontSize: 16 }}
+                  disabled={regPwd ? checkPasswordStrength(regPwd).score < 100 : true}>
                   注册
                 </Button>
               </Form>
