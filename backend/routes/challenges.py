@@ -5,6 +5,78 @@ from utils.auth import get_current_user
 
 challenges_bp = Blueprint('challenges', __name__)
 
+def _check_badges(supabase, user_id):
+    """Check and award any newly earned badges. Returns list of new badges."""
+    all_badges = supabase.from_('badges').select('*').execute().data
+    earned = supabase.from_('user_badges').select('badge_id').eq('user_id', user_id).execute()
+    earned_ids = set(b['badge_id'] for b in earned.data)
+
+    # Stats needed for checks
+    done = supabase.from_('daily_challenges').select('id, date, challenge:challenge_id(category)'
+    ).eq('user_id', user_id).eq('status', 'done').order('date', desc=True).execute()
+    done_records = done.data
+    total_completed = len(done_records)
+
+    # Streak calculation
+    streak = 0
+    if done_records:
+        dates = sorted(set(r['date'] for r in done_records), reverse=True)
+        check = date.today()
+        for d in dates:
+            d_date = date.fromisoformat(d)
+            if d_date == check or d_date == check - timedelta(days=1):
+                if d_date == check:
+                    streak += 1
+                    check = d_date - timedelta(days=1)
+                elif d_date == check - timedelta(days=1):
+                    streak += 1
+                    check = d_date - timedelta(days=1)
+            else:
+                break
+
+    # Likes received
+    dc_ids = [r['id'] for r in done_records]
+    likes_received = 0
+    if dc_ids:
+        lr = supabase.from_('likes').select('id', count='exact').in_('daily_challenge_id', dc_ids).execute()
+        likes_received = lr.count
+
+    # Category counts
+    cat_counts = {}
+    for r in done_records:
+        cat = r.get('challenge', {}).get('category')
+        if cat:
+            cat_counts[cat] = cat_counts.get(cat, 0) + 1
+    all_cats_done = set(cat_counts.keys()) == {'运动', '美食', '学习', '创意', '生活'}
+
+    new_badges = []
+    for badge in all_badges:
+        if badge['id'] in earned_ids:
+            continue
+        cond = badge.get('condition', {})
+        award = False
+
+        if 'completed' in cond:
+            award = total_completed >= cond['completed']
+        elif 'streak' in cond:
+            award = streak >= cond['streak']
+        elif 'likes_received' in cond:
+            award = likes_received >= cond['likes_received']
+        elif 'all_categories' in cond:
+            award = all_cats_done
+        elif 'category' in cond:
+            award = cat_counts.get(cond['category'], 0) >= cond['count']
+
+        if award:
+            supabase.from_('user_badges').insert({
+                'user_id': user_id,
+                'badge_id': badge['id']
+            }).execute()
+            new_badges.append(badge)
+
+    return new_badges
+
+
 @challenges_bp.route('/today', methods=['GET'])
 def get_today_challenge():
     user_id = get_current_user()
@@ -14,7 +86,6 @@ def get_today_challenge():
     supabase = get_auth_supabase()
     today = date.today().isoformat()
 
-    # 1. Return pending challenge for today if exists
     pending = supabase.from_('daily_challenges').select(
         '*, challenge:challenge_id(*)'
     ).eq('user_id', user_id).eq('date', today).eq('status', 'pending').execute()
@@ -22,13 +93,9 @@ def get_today_challenge():
     if pending.data:
         return jsonify({'code': 0, 'data': pending.data[0]})
 
-    # 2. Get all challenge IDs this user has ever used
-    used = supabase.from_('daily_challenges').select(
-        'challenge_id'
-    ).eq('user_id', user_id).execute()
+    used = supabase.from_('daily_challenges').select('challenge_id').eq('user_id', user_id).execute()
     used_ids = list(set(c['challenge_id'] for c in used.data))
 
-    # 3. Pick a random unused challenge
     all_challenges = supabase.from_('challenges').select('*').execute().data
     available = [c for c in all_challenges if c['id'] not in used_ids]
 
@@ -36,10 +103,8 @@ def get_today_challenge():
     chosen = random.choice(available) if available else random.choice(all_challenges)
 
     dc = supabase.from_('daily_challenges').insert({
-        'user_id': user_id,
-        'challenge_id': chosen['id'],
-        'date': today,
-        'status': 'pending'
+        'user_id': user_id, 'challenge_id': chosen['id'],
+        'date': today, 'status': 'pending'
     }).execute()
 
     result = supabase.from_('daily_challenges').select(
@@ -47,6 +112,7 @@ def get_today_challenge():
     ).eq('id', dc.data[0]['id']).single().execute()
 
     return jsonify({'code': 0, 'data': result.data})
+
 
 @challenges_bp.route('/complete', methods=['POST'])
 def complete_challenge():
@@ -70,7 +136,14 @@ def complete_challenge():
         'id', dc_id
     ).eq('user_id', user_id).execute()
 
-    return jsonify({'code': 0, 'message': '挑战完成！'})
+    new_badges = _check_badges(supabase, user_id)
+
+    return jsonify({
+        'code': 0,
+        'message': '挑战完成！',
+        'new_badges': new_badges
+    })
+
 
 @challenges_bp.route('/skip', methods=['POST'])
 def skip_challenge():
@@ -87,6 +160,7 @@ def skip_challenge():
     ).eq('user_id', user_id).execute()
 
     return jsonify({'code': 0, 'message': '已跳过'})
+
 
 @challenges_bp.route('/history', methods=['GET'])
 def get_history():
