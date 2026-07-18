@@ -47,3 +47,25 @@ def get_stats():
             'total_likes_received': likes_received.count,
         }
     })
+
+
+@badges_bp.route('/user/<uuid:target_id>', methods=['GET'])
+def get_user_badges_public(target_id):
+    supabase = get_auth_supabase()
+    target_id_str = str(target_id)
+
+    all_badges = supabase.from_('badges').select('*').execute().data or []
+    earned = supabase.from_('user_badges').select('badge_id').eq('user_id', target_id_str).execute()
+    earned_ids = set(b['badge_id'] for b in (earned.data or []))
+
+    result = []
+    for badge in all_badges:
+        result.append({
+            'id': badge['id'],
+            'name': badge['name'],
+            'icon': badge['icon'],
+            'description': badge['description'],
+            'earned': badge['id'] in earned_ids
+        })
+
+    return jsonify({'code': 0, 'data': result})

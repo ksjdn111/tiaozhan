@@ -162,10 +162,12 @@ CREATE TABLE IF NOT EXISTS comments (
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   daily_challenge_id INTEGER NOT NULL REFERENCES daily_challenges(id) ON DELETE CASCADE,
   content TEXT NOT NULL,
+  parent_id INTEGER REFERENCES comments(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_comments_dc ON comments(daily_challenge_id);
+CREATE INDEX IF NOT EXISTS idx_comments_parent ON comments(parent_id);
 
 ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "comments_select" ON comments FOR SELECT USING (true);

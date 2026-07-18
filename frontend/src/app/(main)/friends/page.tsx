@@ -134,7 +134,17 @@ export default function FriendsPage() {
                     </Avatar>
                   )}
                   title={<span style={{ fontWeight: 600 }}>{f.username}</span>}
-                  description={<span style={{ fontSize: 12, color: '#999' }}>{f.bio || '暂无简介'}</span>}
+                  description={
+                    <div>
+                      {f.last_message ? (
+                        <span style={{ fontSize: 12, color: f.from_me ? '#bbb' : '#999' }}>
+                          {f.from_me ? `你: ${f.last_message.substring(0, 20)}${f.last_message.length > 20 ? '...' : ''}` : f.last_message.substring(0, 25)}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 12, color: '#999' }}>{f.bio || '暂无简介'}</span>
+                      )}
+                    </div>
+                  }
                 />
               </List.Item>
             )} />

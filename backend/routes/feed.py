@@ -120,6 +120,7 @@ def add_comment():
     data = request.get_json()
     dc_id = data.get('daily_challenge_id')
     content = data.get('content', '').strip()
+    parent_id = data.get('parent_id')
 
     if not dc_id or not content:
         return jsonify({'code': 1, 'message': '参数不完整'}), 400
@@ -127,10 +128,61 @@ def add_comment():
         return jsonify({'code': 1, 'message': '评论最长500个字符'}), 400
 
     supabase = get_auth_supabase()
-    supabase.from_('comments').insert({
+    insert_data = {
         'user_id': str(user_id),
         'daily_challenge_id': dc_id,
         'content': content
-    }).execute()
+    }
+    if parent_id:
+        insert_data['parent_id'] = parent_id
+    supabase.from_('comments').insert(insert_data).execute()
 
     return jsonify({'code': 0, 'message': '评论成功'})
+
+
+@feed_bp.route('/notifications', methods=['GET'])
+def get_notifications():
+    user_id = get_current_user()
+    if not user_id:
+        return jsonify({'code': 1, 'message': '未授权'}), 401
+
+    supabase = get_auth_supabase()
+
+    # Get user's daily challenge IDs
+    dc_ids_resp = supabase.from_('daily_challenges').select('id').eq('user_id', user_id).execute()
+    dc_ids = [d['id'] for d in (dc_ids_resp.data or [])]
+
+    notifications = []
+
+    if dc_ids:
+        # Likes received
+        likes = supabase.from_('likes').select(
+            'id, created_at, user_id, daily_challenge_id, profile:user_id(username, avatar_url)'
+        ).in_('daily_challenge_id', dc_ids).order('created_at', desc=True).limit(20).execute()
+        for l in (likes.data or []):
+            dc = supabase.from_('daily_challenges').select('id, challenge:challenge_id(title)').eq('id', l['daily_challenge_id']).single().execute()
+            notifications.append({
+                'type': 'like',
+                'user': l.get('profile', {}),
+                'challenge_title': dc.data.get('challenge', {}).get('title', '') if dc.data else '',
+                'created_at': l['created_at']
+            })
+
+        # Comments received
+        comments = supabase.from_('comments').select(
+            'id, created_at, user_id, daily_challenge_id, content, profile:user_id(username, avatar_url)'
+        ).in_('daily_challenge_id', dc_ids).neq('user_id', user_id).order('created_at', desc=True).limit(20).execute()
+        for c in (comments.data or []):
+            dc = supabase.from_('daily_challenges').select('id, challenge:challenge_id(title)').eq('id', c['daily_challenge_id']).single().execute()
+            notifications.append({
+                'type': 'comment',
+                'user': c.get('profile', {}),
+                'challenge_title': dc.data.get('challenge', {}).get('title', '') if dc.data else '',
+                'content': c['content'],
+                'created_at': c['created_at']
+            })
+
+    # Sort by time desc
+    notifications.sort(key=lambda n: n['created_at'], reverse=True)
+
+    return jsonify({'code': 0, 'data': notifications[:30]})

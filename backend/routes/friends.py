@@ -81,21 +81,47 @@ def get_friends():
     friends_list = []
     for f in sent.data:
         p = f.get('profile', {})
+        friend_id = f['addressee_id']
+        last_msg = supabase.from_('messages').select('content, created_at, sender_id').or_(
+            f'sender_id.eq.{user_id},receiver_id.eq.{user_id}'
+        ).execute()
+        lm = None
+        for m in reversed(last_msg.data or []):
+            other = str(m['receiver_id']) if str(m['sender_id']) == str(user_id) else str(m['sender_id'])
+            if other == str(friend_id):
+                lm = m
+                break
         friends_list.append({
-            'friend_id': f['addressee_id'],
+            'friend_id': friend_id,
             'username': p.get('username', ''),
             'avatar_url': p.get('avatar_url', ''),
             'bio': p.get('bio', ''),
-            'since': f['created_at']
+            'since': f['created_at'],
+            'last_message': lm['content'] if lm else None,
+            'last_message_time': lm['created_at'] if lm else None,
+            'from_me': lm and str(lm['sender_id']) == str(user_id),
         })
     for f in received.data:
         p = f.get('profile', {})
+        friend_id = f['requester_id']
+        last_msg = supabase.from_('messages').select('content, created_at, sender_id').or_(
+            f'sender_id.eq.{user_id},receiver_id.eq.{user_id}'
+        ).execute()
+        lm = None
+        for m in reversed(last_msg.data or []):
+            other = str(m['receiver_id']) if str(m['sender_id']) == str(user_id) else str(m['sender_id'])
+            if other == str(friend_id):
+                lm = m
+                break
         friends_list.append({
-            'friend_id': f['requester_id'],
+            'friend_id': friend_id,
             'username': p.get('username', ''),
             'avatar_url': p.get('avatar_url', ''),
             'bio': p.get('bio', ''),
-            'since': f['created_at']
+            'since': f['created_at'],
+            'last_message': lm['content'] if lm else None,
+            'last_message_time': lm['created_at'] if lm else None,
+            'from_me': lm and str(lm['sender_id']) == str(user_id),
         })
 
     return jsonify({'code': 0, 'data': friends_list})

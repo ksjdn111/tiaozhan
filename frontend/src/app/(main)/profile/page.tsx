@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Card, Button, Spin, Statistic, Row, Col, Empty, message, List, Tag, Modal, Input, Upload, Avatar, Divider } from 'antd'
-import { LogoutOutlined, TrophyOutlined, EditOutlined, UserOutlined, FireOutlined, CheckCircleOutlined, HeartOutlined, SettingOutlined, SmileOutlined } from '@ant-design/icons'
+import { LogoutOutlined, TrophyOutlined, EditOutlined, UserOutlined, FireOutlined, CheckCircleOutlined, HeartOutlined, SettingOutlined, SmileOutlined, BellOutlined, HeartFilled, MessageFilled } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
@@ -26,6 +26,8 @@ export default function ProfilePage() {
   const [bioUpdating, setBioUpdating] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState('')
   const [avatarUpdating, setAvatarUpdating] = useState(false)
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [notifOpen, setNotifOpen] = useState(false)
 
   const getToken = async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -43,24 +45,27 @@ export default function ProfilePage() {
         const token = await getToken()
         if (!token) { setError('未登录，请重新登录'); setLoading(false); return }
 
-        const [profileRes, statsRes, badgesRes, historyRes, allBadgesRes] = await Promise.all([
+        const [profileRes, statsRes, badgesRes, historyRes, allBadgesRes, notifRes] = await Promise.all([
           fetch(`${API}/auth/profile`, { headers: { Authorization: `Bearer ${token}` } }),
           fetch(`${API}/badges/stats`, { headers: { Authorization: `Bearer ${token}` } }),
           fetch(`${API}/badges/user`, { headers: { Authorization: `Bearer ${token}` } }),
           fetch(`${API}/challenge/history?size=5`, { headers: { Authorization: `Bearer ${token}` } }),
           fetch(`${API}/badges/list`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${API}/feed/notifications`, { headers: { Authorization: `Bearer ${token}` } }),
         ])
         const profileData = await profileRes.json()
         const statsData = await statsRes.json()
         const badgesData = await badgesRes.json()
         const historyData = await historyRes.json()
         const allBadgesData = await allBadgesRes.json()
+        const notifData = await notifRes.json()
 
         if (profileData.code === 0) setProfile(profileData.data)
         if (statsData.code === 0) setStats(statsData.data)
         if (badgesData.code === 0) setBadges(badgesData.data)
         if (historyData.code === 0) setHistory(historyData.data)
         if (allBadgesData.code === 0) setAllBadges(allBadgesData.data)
+        if (notifData.code === 0) setNotifications(notifData.data)
         if (profileData.code !== 0) setError(profileData.message || '获取个人信息失败')
       } catch {
         setError('网络错误，请确认后端服务已启动')
@@ -234,6 +239,21 @@ export default function ProfilePage() {
       </div>
 
       <div style={{ padding: 16 }}>
+        {/* Notifications */}
+        <Card style={{ borderRadius: 14, marginBottom: 12, border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', cursor: 'pointer' }}
+          onClick={() => setNotifOpen(true)}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <BellOutlined style={{ fontSize: 18, color: '#667eea' }} />
+            <span style={{ fontWeight: 600, fontSize: 14, flex: 1 }}>通知</span>
+            {notifications.length > 0 && (
+              <span style={{ fontSize: 12, color: '#999' }}>
+                最近 {notifications.slice(0, 3).map((n: any) => n.user?.username).join('、')} 等 {notifications.length} 条互动
+              </span>
+            )}
+            <span style={{ color: '#ccc', fontSize: 12 }}>查看 &gt;</span>
+          </div>
+        </Card>
+
         {/* Badges */}
         <Card style={{ borderRadius: 14, marginBottom: 12, border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}
           title={<div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><TrophyOutlined style={{ color: '#faad14' }} /><span>成就徽章</span></div>}>
@@ -298,6 +318,38 @@ export default function ProfilePage() {
           </Button>
         </div>
       </div>
+
+      {/* Notifications modal */}
+      <Modal title={<span><BellOutlined /> 互动通知</span>} open={notifOpen} onCancel={() => setNotifOpen(false)} footer={null} centered width={400}>
+        {notifications.length === 0 ? (
+          <Empty description="暂无互动" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        ) : (
+          <List dataSource={notifications} renderItem={(n: any) => (
+            <List.Item style={{ padding: '10px 0' }}>
+              <List.Item.Meta
+                avatar={n.user?.avatar_url ? <Avatar src={n.user.avatar_url} size={36} /> : (
+                  <Avatar size={36} style={{ background: 'linear-gradient(135deg, #667eea, #764ba2)' }}>
+                    {(n.user?.username || '?')[0]}
+                  </Avatar>
+                )}
+                title={
+                  <span style={{ fontSize: 13 }}>
+                    <strong>{n.user?.username}</strong>
+                    {n.type === 'like' ? ' 赞了你的挑战' : ' 评论了你的挑战'}
+                  </span>
+                }
+                description={
+                  <div>
+                    <span style={{ fontSize: 12, color: '#999' }}>《{n.challenge_title}》</span>
+                    {n.content && <p style={{ margin: '2px 0 0', fontSize: 12, color: '#666' }}>{n.content}</p>}
+                    <span style={{ fontSize: 11, color: '#ccc' }}>{new Date(n.created_at).toLocaleString('zh-CN')}</span>
+                  </div>
+                }
+              />
+            </List.Item>
+          )} />
+        )}
+      </Modal>
 
       {/* Avatar modal */}
       <Modal title="修改头像" open={avatarModalOpen} onCancel={() => setAvatarModalOpen(false)} footer={null} centered>
