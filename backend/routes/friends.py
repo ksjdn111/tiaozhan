@@ -149,6 +149,11 @@ def get_messages(friend_id):
         f'sender_id.eq.{friend_id_str},receiver_id.eq.{friend_id_str}'
     ).order('created_at').execute()
 
+    # Mark received messages as read
+    supabase.from_('messages').update({'is_read': True}).eq(
+        'receiver_id', str(user_id)
+    ).eq('sender_id', friend_id_str).eq('is_read', False).execute()
+
     msgs = []
     for m in result.data:
         msgs.append({
@@ -218,3 +223,53 @@ def get_conversations():
                 conversations[pid]['avatar_url'] = p.get('avatar_url', '')
 
     return jsonify({'code': 0, 'data': list(conversations.values())})
+
+
+@friends_bp.route('/unread-count', methods=['GET'])
+def get_unread_count():
+    user_id = get_current_user()
+    if not user_id:
+        return jsonify({'code': 1, 'message': '未授权'}), 401
+
+    supabase = get_auth_supabase()
+
+    # Pending friend requests
+    req_count = supabase.from_('friends').select('id', count='exact').eq(
+        'addressee_id', user_id
+    ).eq('status', 'pending').execute()
+
+    # Unread messages
+    msg_count = supabase.from_('messages').select('id', count='exact').eq(
+        'receiver_id', user_id
+    ).eq('is_read', False).execute()
+
+    return jsonify({'code': 0, 'data': {
+        'friend_requests': req_count.count or 0,
+        'unread_messages': msg_count.count or 0,
+        'total': (req_count.count or 0) + (msg_count.count or 0)
+    }})
+
+
+@friends_bp.route('/check/<uuid:target_id>', methods=['GET'])
+def check_friendship(target_id):
+    user_id = get_current_user()
+    if not user_id:
+        return jsonify({'code': 1, 'message': '未授权'}), 401
+
+    target_id_str = str(target_id)
+    if str(user_id) == target_id_str:
+        return jsonify({'code': 0, 'data': {'status': 'self'}})
+
+    supabase = get_auth_supabase()
+    result = supabase.from_('friends').select('status').or_(
+        f'requester_id.eq.{user_id},addressee_id.eq.{user_id}'
+    ).or_(
+        f'requester_id.eq.{target_id_str},addressee_id.eq.{target_id_str}'
+    ).execute()
+
+    for f in result.data:
+        ids = {f['requester_id'], f['addressee_id']}
+        if str(user_id) in ids and target_id_str in ids:
+            return jsonify({'code': 0, 'data': {'status': f['status']}})
+
+    return jsonify({'code': 0, 'data': {'status': 'none'}})

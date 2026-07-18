@@ -1,13 +1,15 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
-import { Card, Button, Spin, Empty, message, Modal, Input, List, Avatar, Tag, Badge, Tabs, Divider } from 'antd'
-import { UserAddOutlined, UserOutlined, MessageOutlined, SendOutlined, TeamOutlined, SearchOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { Button, Spin, Empty, message, Modal, Input, List, Avatar, Tag, Badge, Tabs } from 'antd'
+import { UserAddOutlined, UserOutlined, MessageOutlined, TeamOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons'
 import { supabase } from '@/lib/supabase'
 
 const API = '/api'
 
 export default function FriendsPage() {
+  const router = useRouter()
   const [friends, setFriends] = useState<any[]>([])
   const [requests, setRequests] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -16,22 +18,11 @@ export default function FriendsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [searching, setSearching] = useState(false)
-  const [chatOpen, setChatOpen] = useState(false)
-  const [chatFriend, setChatFriend] = useState<any>(null)
-  const [messages, setMessages] = useState<any[]>([])
-  const [msgText, setMsgText] = useState('')
-  const [msgLoading, setMsgLoading] = useState(false)
   const [tabKey, setTabKey] = useState('friends')
-  const chatEndRef = useRef<HTMLDivElement>(null)
 
   const getToken = async () => {
     const { data: { session } } = await supabase.auth.getSession()
     return session?.access_token || ''
-  }
-
-  const getUserId = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    return session?.user?.id || ''
   }
 
   const fetchData = async () => {
@@ -53,11 +44,6 @@ export default function FriendsPage() {
   }
 
   useEffect(() => { fetchData() }, [])
-
-  // Auto-scroll chat
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
 
   const handleSearch = async (q: string) => {
     setSearchQuery(q)
@@ -100,37 +86,6 @@ export default function FriendsPage() {
     }
   }
 
-  const openChat = async (friend: any) => {
-    setChatFriend(friend)
-    setChatOpen(true)
-    setMsgLoading(true)
-    const token = await getToken()
-    const res = await fetch(`${API}/friends/messages/${friend.friend_id}`, { headers: { Authorization: `Bearer ${token}` } })
-    const data = await res.json()
-    if (data.code === 0) setMessages(data.data)
-    setMsgLoading(false)
-  }
-
-  const handleSendMsg = async () => {
-    if (!msgText.trim()) return
-    const token = await getToken()
-    const res = await fetch(`${API}/friends/messages/send`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ receiver_id: chatFriend.friend_id, content: msgText.trim() })
-    })
-    const data = await res.json()
-    if (data.code === 0) {
-      setMessages([...messages, {
-        id: Date.now(), sender_id: 'me', content: msgText.trim(),
-        created_at: new Date().toISOString(), is_me: true
-      }])
-      setMsgText('')
-    } else {
-      message.error(data.message || '发送失败')
-    }
-  }
-
   if (loading) return (
     <div style={{ padding: 16 }}>
       <div className="skeleton" style={{ height: 24, width: '30%', marginBottom: 16 }} />
@@ -164,10 +119,10 @@ export default function FriendsPage() {
             <Empty description="还没有好友" image={Empty.PRESENTED_IMAGE_SIMPLE} />
           ) : (
             <List dataSource={friends} renderItem={(f: any) => (
-              <List.Item style={{ padding: '10px 0', cursor: 'pointer' }}
+              <List.Item style={{ padding: '10px 0' }}
                 actions={[
                   <Button key="chat" type="text" icon={<MessageOutlined />}
-                    onClick={() => openChat(f)}
+                    onClick={() => router.push(`/friends/chat?id=${f.friend_id}&name=${encodeURIComponent(f.username)}`)}
                     style={{ color: '#667eea' }} />
                 ]}>
                 <List.Item.Meta
@@ -195,16 +150,12 @@ export default function FriendsPage() {
               <List.Item style={{ padding: '10px 0' }}
                 actions={[
                   <Button key="accept" type="primary" size="small" icon={<CheckOutlined />}
-                    onClick={() => handleRespond(r.id, true)}
-                    style={{ borderRadius: 8, border: 'none' }} />,
+                    onClick={() => handleRespond(r.id, true)} style={{ borderRadius: 8, border: 'none' }} />,
                   <Button key="reject" size="small" icon={<CloseOutlined />}
-                    onClick={() => handleRespond(r.id, false)}
-                    style={{ borderRadius: 8 }} />
+                    onClick={() => handleRespond(r.id, false)} style={{ borderRadius: 8 }} />
                 ]}>
                 <List.Item.Meta
-                  avatar={r.profile?.avatar_url ? (
-                    <Avatar src={r.profile.avatar_url} size={40} />
-                  ) : (
+                  avatar={r.profile?.avatar_url ? <Avatar src={r.profile.avatar_url} size={40} /> : (
                     <Avatar size={40} style={{ background: 'linear-gradient(135deg, #667eea, #764ba2)' }}>
                       {(r.profile?.username || '?')[0]}
                     </Avatar>
@@ -221,24 +172,15 @@ export default function FriendsPage() {
       {/* Search modal */}
       <Modal title="添加好友" open={searchOpen} onCancel={() => { setSearchOpen(false); setSearchResults([]); setSearchQuery('') }}
         footer={null} centered>
-        <Input.Search
-          placeholder="搜索用户名"
-          value={searchQuery}
-          onChange={e => handleSearch(e.target.value)}
-          style={{ marginBottom: 12 }}
-        />
+        <Input.Search placeholder="搜索用户名" value={searchQuery}
+          onChange={e => handleSearch(e.target.value)} style={{ marginBottom: 12 }} />
         {searching ? <Spin style={{ display: 'block', textAlign: 'center', margin: 16 }} /> : (
-          searchResults.length === 0 ? (
-            searchQuery ? <Empty description="未找到用户" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : null
-          ) : (
+          searchResults.length === 0 ? (searchQuery ? <Empty description="未找到用户" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : null) : (
             <List dataSource={searchResults} renderItem={(u: any) => (
               <List.Item style={{ padding: '8px 0' }}
                 actions={[
                   <Button key="add" type="primary" size="small" icon={<UserAddOutlined />}
-                    onClick={() => handleAddFriend(u.id)}
-                    style={{ borderRadius: 8, border: 'none' }}>
-                    添加
-                  </Button>
+                    onClick={() => handleAddFriend(u.id)} style={{ borderRadius: 8, border: 'none' }}>添加</Button>
                 ]}>
                 <List.Item.Meta
                   avatar={u.avatar_url ? <Avatar src={u.avatar_url} size={36} /> : (
@@ -253,49 +195,6 @@ export default function FriendsPage() {
             )} />
           )
         )}
-      </Modal>
-
-      {/* Chat modal */}
-      <Modal title={chatFriend ? `与 ${chatFriend.username} 聊天` : '聊天'} open={chatOpen}
-        onCancel={() => { setChatOpen(false); setChatFriend(null); setMessages([]) }}
-        footer={null} centered width={400}>
-        <div style={{ height: 320, overflow: 'auto', marginBottom: 12, padding: '4px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {msgLoading ? <Spin style={{ display: 'block', textAlign: 'center', marginTop: 80 }} /> : (
-            messages.length === 0 ? (
-              <div style={{ textAlign: 'center', color: '#ccc', marginTop: 80 }}>暂无消息，开始聊天吧</div>
-            ) : (
-              messages.map((m: any) => (
-                <div key={m.id} style={{
-                  display: 'flex', justifyContent: m.is_me ? 'flex-end' : 'flex-start',
-                  marginBottom: 4,
-                }}>
-                  <div style={{
-                    maxWidth: '75%', padding: '8px 14px',
-                    borderRadius: m.is_me ? '16px 4px 16px 16px' : '4px 16px 16px 16px',
-                    background: m.is_me ? '#667eea' : '#f0f0f0',
-                    color: m.is_me ? '#fff' : '#333',
-                    fontSize: 14, lineHeight: 1.5,
-                  }}>
-                    {m.content}
-                    <div style={{ fontSize: 10, opacity: 0.6, marginTop: 2, textAlign: 'right' }}>
-                      {new Date(m.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )
-          )}
-          <div ref={chatEndRef} />
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Input value={msgText} onChange={e => setMsgText(e.target.value)}
-            placeholder="输入消息..." maxLength={1000}
-            style={{ borderRadius: 10, flex: 1 }}
-            onPressEnter={handleSendMsg}
-          />
-          <Button type="primary" icon={<SendOutlined />} onClick={handleSendMsg}
-            style={{ borderRadius: 10, border: 'none' }} />
-        </div>
       </Modal>
     </div>
   )

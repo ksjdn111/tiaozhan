@@ -199,7 +199,10 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE;
+
 CREATE INDEX IF NOT EXISTS idx_messages_participants ON messages(sender_id, receiver_id);
+CREATE INDEX IF NOT EXISTS idx_messages_unread ON messages(receiver_id, is_read);
 
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "messages_select" ON messages FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);

@@ -19,12 +19,25 @@ def get_feed():
         '*, challenge:challenge_id(*), profile:user_id(username, avatar_url), likes:likes(count)'
     ).eq('status', 'done').order('created_at', desc=True).range(offset, offset + size - 1).execute()
 
+    dc_ids = [item['id'] for item in result.data]
+
+    # Bulk liked_by_me
+    my_likes = supabase.from_('likes').select('daily_challenge_id').eq(
+        'user_id', user_id
+    ).in_('daily_challenge_id', dc_ids).execute() if dc_ids else []
+    liked_ids = set(l['daily_challenge_id'] for l in (my_likes.data or []))
+
+    # Bulk comment counts
+    comment_counts = {}
+    if dc_ids:
+        for dc_id in dc_ids:
+            cc = supabase.from_('comments').select('id', count='exact').eq('daily_challenge_id', dc_id).execute()
+            comment_counts[dc_id] = cc.count
+
     for item in result.data:
-        my_like = supabase.from_('likes').select('id').eq(
-            'user_id', user_id
-        ).eq('daily_challenge_id', item['id']).execute()
-        item['liked_by_me'] = len(my_like.data) > 0
+        item['liked_by_me'] = item['id'] in liked_ids
         item['like_count'] = len(item.get('likes', []))
+        item['comment_count'] = comment_counts.get(item['id'], 0)
 
     return jsonify({'code': 0, 'data': result.data})
 
@@ -81,6 +94,21 @@ def get_detail(dc_id):
         '*, profile:user_id(username, avatar_url)'
     ).eq('daily_challenge_id', dc_id).order('created_at').execute()
     item['comments'] = comments.data if comments.data else []
+
+    # Check if current user is friends with the post author
+    friendship = supabase.from_('friends').select('status').or_(
+        f'requester_id.eq.{user_id},addressee_id.eq.{user_id}'
+    ).or_(
+        f'requester_id.eq.{item["user_id"]},addressee_id.eq.{item["user_id"]}'
+    ).execute()
+    is_friend = False
+    for f in friendship.data:
+        ids = {f['requester_id'], f['addressee_id']}
+        if str(user_id) in ids and str(item['user_id']) in ids and f['status'] == 'accepted':
+            is_friend = True
+            break
+    item['is_friend'] = is_friend
+    item['is_self'] = str(item['user_id']) == str(user_id)
 
     return jsonify({'code': 0, 'data': item})
 
