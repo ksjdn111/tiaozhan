@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Card, Button, Spin, Tag, Input, message, Empty, Upload, Progress, Modal } from 'antd'
-import { CheckCircleOutlined, CloseCircleOutlined, ThunderboltOutlined, PlusOutlined, FireOutlined, TrophyOutlined } from '@ant-design/icons'
+import { Card, Button, Spin, Tag, Input, message, Empty, Upload, Progress, Modal, Select, Form } from 'antd'
+import { CheckCircleOutlined, CloseCircleOutlined, ThunderboltOutlined, PlusOutlined, FireOutlined, TrophyOutlined, EditOutlined } from '@ant-design/icons'
 import { supabase } from '@/lib/supabase'
 
 const API = '/api'
@@ -26,6 +26,12 @@ export default function DashboardPage() {
   const [actionLoading, setActionLoading] = useState(false)
   const [streak, setStreak] = useState(0)
   const [newBadges, setNewBadges] = useState<any[]>([])
+  const [customOpen, setCustomOpen] = useState(false)
+  const [customTitle, setCustomTitle] = useState('')
+  const [customDesc, setCustomDesc] = useState('')
+  const [customCategory, setCustomCategory] = useState('运动')
+  const [customDifficulty, setCustomDifficulty] = useState(3)
+  const [customLoading, setCustomLoading] = useState(false)
 
   const getToken = async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -35,6 +41,29 @@ export default function DashboardPage() {
   const getUserId = async () => {
     const { data: { session } } = await supabase.auth.getSession()
     return session?.user?.id || ''
+  }
+
+  const handleCreateCustom = async () => {
+    if (!customTitle.trim()) { message.error('请输入挑战标题'); return }
+    if (!customDesc.trim()) { message.error('请输入挑战描述'); return }
+    setCustomLoading(true)
+    const token = await getToken()
+    const res = await fetch(`${API}/challenge/custom`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ title: customTitle.trim(), description: customDesc.trim(), category: customCategory, difficulty: customDifficulty })
+    })
+    const data = await res.json()
+    if (data.code === 0) {
+      message.success('自定义挑战已创建！')
+      setCustomOpen(false)
+      setCustomTitle('')
+      setCustomDesc('')
+      fetchToday()
+    } else {
+      message.error(data.message || '创建失败')
+    }
+    setCustomLoading(false)
   }
 
   const fetchToday = async () => {
@@ -130,6 +159,17 @@ export default function DashboardPage() {
         </div>
         <TrophyOutlined style={{ fontSize: 20, color: '#faad14' }} />
       </div>
+
+      {/* Custom challenge button */}
+      <Button
+        icon={<EditOutlined />}
+        onClick={() => setCustomOpen(true)}
+        size="small"
+        style={{ marginBottom: 12, borderRadius: 8, float: 'right' }}
+      >
+        创建自定义挑战
+      </Button>
+      <div style={{ clear: 'both' }} />
 
       {/* Challenge card */}
       <Card style={{
@@ -245,6 +285,18 @@ export default function DashboardPage() {
           </div>
         )}
       </Card>
+      {/* Custom challenge modal */}
+      <Modal title="创建自定义挑战" open={customOpen} onCancel={() => setCustomOpen(false)} onOk={handleCreateCustom} confirmLoading={customLoading} centered>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Input value={customTitle} onChange={e => setCustomTitle(e.target.value)} placeholder="挑战标题" maxLength={100} showCount style={{ borderRadius: 10 }} />
+          <Input.TextArea value={customDesc} onChange={e => setCustomDesc(e.target.value)} placeholder="挑战描述" rows={3} style={{ borderRadius: 10 }} />
+          <Select value={customCategory} onChange={setCustomCategory} style={{ borderRadius: 10 }}
+            options={['运动', '美食', '学习', '创意', '生活'].map(c => ({ label: c, value: c }))} />
+          <Select value={customDifficulty} onChange={setCustomDifficulty} style={{ borderRadius: 10 }}
+            options={[1,2,3,4,5].map(d => ({ label: `${'★'.repeat(d)}${'☆'.repeat(5-d)} (${d}级)`, value: d }))} />
+        </div>
+      </Modal>
+
       {/* Badge unlock modal */}
       <Modal
         open={newBadges.length > 0}
