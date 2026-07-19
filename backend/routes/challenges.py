@@ -23,6 +23,7 @@ def _merge_custom_note(item):
                 chal['creator_id'] = custom.get('creator_id', chal.get('creator_id'))
                 item['challenge'] = chal
                 item['_is_custom'] = True
+                item['_user_note'] = custom.get('user_note', '')
         except (json.JSONDecodeError, TypeError):
             pass
     return item

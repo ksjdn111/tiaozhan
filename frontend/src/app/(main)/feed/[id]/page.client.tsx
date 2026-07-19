@@ -168,7 +168,7 @@ export default function FeedDetailPage() {
             </div>
           </div>
         </div>
-        {item.note && <div style={{ background: '#f9f9f9', borderRadius: 10, padding: '10px 14px', margin: '8px 0' }}><p style={{ margin: 0, fontSize: 13, color: '#555', lineHeight: 1.6 }}>{item.note}</p></div>}
+        {(item._is_custom ? item._user_note : item.note) && <div style={{ background: '#f9f9f9', borderRadius: 10, padding: '10px 14px', margin: '8px 0' }}><p style={{ margin: 0, fontSize: 13, color: '#555', lineHeight: 1.6 }}>{item._is_custom ? item._user_note : item.note}</p></div>}
         {item.photo_url && <img src={item.photo_url} alt="proof" style={{ width: '100%', borderRadius: 10, marginTop: 6, maxHeight: 320, objectFit: 'cover' }} />}
       </Card>
 

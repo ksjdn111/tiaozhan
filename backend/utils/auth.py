@@ -1,7 +1,8 @@
 from flask import request, g
 import jwt as pyjwt
+from typing import Optional
 
-def get_current_user() -> str | None:
+def get_current_user() -> Optional[str]:
     token = request.headers.get('Authorization', '').replace('Bearer ', '')
     if not token:
         return None

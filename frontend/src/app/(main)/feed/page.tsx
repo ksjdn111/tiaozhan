@@ -165,7 +165,7 @@ export default function FeedPage() {
           </div>
           <div style={{ cursor: 'pointer' }} onClick={() => router.push(`/feed/${item.id}`)}>
             <h4 style={{ margin: '0 0 4px', fontSize: 15 }}>{item.challenge?.title}</h4>
-            {item.note && <p style={{ color: '#666', fontSize: 13, margin: '4px 0', lineHeight: 1.5 }}>{item.note}</p>}
+            {(item._is_custom ? item._user_note : item.note) && <p style={{ color: '#666', fontSize: 13, margin: '4px 0', lineHeight: 1.5 }}>{item._is_custom ? item._user_note : item.note}</p>}
             {item.photo_url && (
               <img src={item.photo_url} alt="challenge"
                 style={{ width: '100%', borderRadius: 10, marginTop: 6, maxHeight: 240, objectFit: 'cover' }}
