@@ -29,9 +29,34 @@ def get_stats():
     if not user_id:
         return jsonify({'code': 1, 'message': '未授权'}), 401
 
+    from datetime import date, timedelta
+
     supabase = get_auth_supabase()
     total = supabase.from_('daily_challenges').select('id', count='exact').eq('user_id', user_id).execute()
     completed = supabase.from_('daily_challenges').select('id', count='exact').eq('user_id', user_id).eq('status', 'done').execute()
+
+    done_records = supabase.from_('daily_challenges').select('date').eq('user_id', user_id).eq('status', 'done').execute()
+
+    # Normalize dates to ISO strings
+    dates_set = set()
+    for r in (done_records.data or []):
+        d = r['date']
+        if isinstance(d, str):
+            dates_set.add(d[:10])
+        else:
+            dates_set.add(d.isoformat()[:10])
+    done_dates = sorted(dates_set, reverse=True)
+
+    # Streak calculation using string comparison
+    streak = 0
+    today_str = date.today().isoformat()
+    for i in range(len(done_dates)):
+        expected = (date.today() - timedelta(days=i)).isoformat()
+        if i < len(done_dates) and done_dates[i] == expected:
+            streak += 1
+        else:
+            break
+
     user_dc_ids = supabase.from_('daily_challenges').select('id').eq('user_id', user_id).execute()
     ids = [d['id'] for d in user_dc_ids.data]
     likes_received = 0
@@ -45,6 +70,7 @@ def get_stats():
             'total_days': total.count,
             'total_completed': completed.count,
             'total_likes_received': likes_received.count,
+            'streak': streak,
         }
     })
 

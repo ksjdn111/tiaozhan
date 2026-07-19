@@ -82,7 +82,7 @@ export default function DashboardPage() {
       const statsData = await statsRes.json()
       if (challengeData.code === 0) { setChallenge(challengeData.data); setError('') }
       else { setError(challengeData.message || '获取挑战失败') }
-      if (statsData.code === 0) setStreak(statsData.data.total_days || 0)
+      if (statsData.code === 0) setStreak(statsData.data.streak || 0)
     } catch {
       setError('网络错误，请确认后端服务已启动')
     }

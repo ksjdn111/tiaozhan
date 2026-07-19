@@ -17,20 +17,22 @@ def _check_badges(supabase, user_id):
     done_records = done.data
     total_completed = len(done_records)
 
-    # Streak calculation
+    # Streak calculation (string-based, handles string/date from Supabase)
     streak = 0
     if done_records:
-        dates = sorted(set(r['date'] for r in done_records), reverse=True)
-        check = date.today()
-        for d in dates:
-            d_date = date.fromisoformat(d)
-            if d_date == check or d_date == check - timedelta(days=1):
-                if d_date == check:
-                    streak += 1
-                    check = d_date - timedelta(days=1)
-                elif d_date == check - timedelta(days=1):
-                    streak += 1
-                    check = d_date - timedelta(days=1)
+        dates_set = set()
+        for r in done_records:
+            d = r['date']
+            if isinstance(d, str):
+                dates_set.add(d[:10])
+            else:
+                dates_set.add(d.isoformat()[:10])
+        dates = sorted(dates_set, reverse=True)
+        today_str = date.today().isoformat()
+        for i in range(len(dates)):
+            expected = (date.today() - timedelta(days=i)).isoformat()
+            if dates[i] == expected:
+                streak += 1
             else:
                 break
 
