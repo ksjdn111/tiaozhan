@@ -32,6 +32,7 @@ export default function FriendsPage() {
       const fd = await friendsRes.json()
       const rd = await reqRes.json()
       if (fd.code === 0) setFriends(fd.data)
+      else if (friendsRes.status === 401) { setError('登录已过期，请重新登录'); setLoading(false); return }
       if (rd.code === 0) setRequests(rd.data)
     } catch {
       setError('网络错误')

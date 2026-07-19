@@ -106,16 +106,16 @@ export default function FeedPage() {
     for (const file of postPhotos) {
       const ext = file.name.split('.').pop()
       const path = `feed/${userId}_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
-      const { error: uploadErr } = await supabase.storage.from('challenge-photos').upload(path, file, { upsert: true })
+      const { error: uploadErr } = await supabase.storage.from('proofs').upload(path, file, { upsert: true })
       if (uploadErr) { message.error('图片上传失败'); setPosting(false); return }
-      const { data: { publicUrl } } = supabase.storage.from('challenge-photos').getPublicUrl(path)
+      const { data: { publicUrl } } = supabase.storage.from('proofs').getPublicUrl(path)
       photoUrls.push(publicUrl)
     }
     const note = JSON.stringify({ custom: true, title: '分享动态', description: postNote.trim(), user_note: postNote.trim() })
-    const res = await fetch(`${API}/challenge/complete`, {
+    const res = await fetch(`${API}/feed/create`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ challenge_id: 0, status: 'done', note, photo_url: photoUrls.length > 0 ? JSON.stringify(photoUrls) : '' }),
+      body: JSON.stringify({ note, photo_url: photoUrls.length > 0 ? JSON.stringify(photoUrls) : '' }),
     })
     const data = await res.json()
     if (data.code === 0) { message.success('发布成功'); setPostModalOpen(false); setPostNote(''); setPostPhotos([]); setPostPhotoPreviews([]); fetchFeed() }

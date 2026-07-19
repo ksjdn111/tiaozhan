@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from services.supabase_client import get_auth_supabase
 from utils.auth import get_current_user
+from datetime import date
 import json
 
 feed_bp = Blueprint('feed', __name__)
@@ -25,6 +26,36 @@ def _merge_custom_note(item):
         except (json.JSONDecodeError, TypeError):
             pass
     return item
+
+@feed_bp.route('/create', methods=['POST'])
+def create_post():
+    user_id = get_current_user()
+    if not user_id:
+        return jsonify({'code': 1, 'message': '未授权'}), 401
+
+    data = request.get_json()
+    note = data.get('note', '').strip()
+    photo_url = data.get('photo_url', '')
+
+    if not note:
+        return jsonify({'code': 1, 'message': '内容不能为空'}), 400
+
+    supabase = get_auth_supabase()
+    today = date.today().isoformat()
+
+    chal = supabase.from_('challenges').select('id').limit(1).execute()
+    container_id = chal.data[0]['id'] if chal.data else 1
+
+    result = supabase.from_('daily_challenges').insert({
+        'user_id': str(user_id),
+        'challenge_id': container_id,
+        'date': today,
+        'status': 'done',
+        'note': note,
+        'photo_url': photo_url
+    }).execute()
+
+    return jsonify({'code': 0, 'message': '发布成功', 'data': result.data[0] if result.data else None})
 
 @feed_bp.route('/list', methods=['GET'])
 def get_feed():
@@ -223,8 +254,9 @@ def add_comment():
     dc_id = data.get('daily_challenge_id')
     content = data.get('content', '').strip()
     parent_id = data.get('parent_id')
+    photo_url = data.get('photo_url')
 
-    if not dc_id or not content:
+    if not dc_id or (not content and not photo_url):
         return jsonify({'code': 1, 'message': '参数不完整'}), 400
     if len(content) > 500:
         return jsonify({'code': 1, 'message': '评论最长500个字符'}), 400
@@ -237,7 +269,6 @@ def add_comment():
     }
     if parent_id:
         insert_data['parent_id'] = parent_id
-    photo_url = data.get('photo_url')
     if photo_url:
         insert_data['photo_url'] = photo_url
     supabase.from_('comments').insert(insert_data).execute()

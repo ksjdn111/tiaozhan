@@ -60,7 +60,7 @@ export default function FeedDetailPage() {
   }
 
   const handleComment = async () => {
-    if (!commentText.trim()) return
+    if (!commentText.trim() && !commentPhoto) return
     setCommentLoading(true)
     const token = await getToken()
     let photoUrl = ''
@@ -68,9 +68,9 @@ export default function FeedDetailPage() {
       const uid = await getUserId()
       const ext = commentPhoto.name.split('.').pop()
       const path = `comments/${uid}_${Date.now()}.${ext}`
-      const { error: uploadErr } = await supabase.storage.from('challenge-photos').upload(path, commentPhoto, { upsert: true })
+      const { error: uploadErr } = await supabase.storage.from('proofs').upload(path, commentPhoto, { upsert: true })
       if (!uploadErr) {
-        const { data: { publicUrl } } = supabase.storage.from('challenge-photos').getPublicUrl(path)
+        const { data: { publicUrl } } = supabase.storage.from('proofs').getPublicUrl(path)
         photoUrl = publicUrl
       }
     }

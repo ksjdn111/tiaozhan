@@ -51,9 +51,9 @@ export default function ChatPage() {
       const uid = await getUserId()
       const ext = chatPhoto.name.split('.').pop()
       const path = `chat/${uid}_${Date.now()}.${ext}`
-      const { error: uploadErr } = await supabase.storage.from('challenge-photos').upload(path, chatPhoto, { upsert: true })
+      const { error: uploadErr } = await supabase.storage.from('proofs').upload(path, chatPhoto, { upsert: true })
       if (!uploadErr) {
-        const { data: { publicUrl } } = supabase.storage.from('challenge-photos').getPublicUrl(path)
+        const { data: { publicUrl } } = supabase.storage.from('proofs').getPublicUrl(path)
         photoUrl = publicUrl
       }
     }

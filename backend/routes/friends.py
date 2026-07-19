@@ -82,7 +82,7 @@ def get_friends():
     for f in sent.data:
         p = f.get('profile', {})
         friend_id = f['addressee_id']
-        last_msg = supabase.from_('messages').select('content, created_at, sender_id').or_(
+        last_msg = supabase.from_('messages').select('content, created_at, sender_id, receiver_id').or_(
             f'sender_id.eq.{user_id},receiver_id.eq.{user_id}'
         ).execute()
         lm = None
@@ -104,7 +104,7 @@ def get_friends():
     for f in received.data:
         p = f.get('profile', {})
         friend_id = f['requester_id']
-        last_msg = supabase.from_('messages').select('content, created_at, sender_id').or_(
+        last_msg = supabase.from_('messages').select('content, created_at, sender_id, receiver_id').or_(
             f'sender_id.eq.{user_id},receiver_id.eq.{user_id}'
         ).execute()
         lm = None
