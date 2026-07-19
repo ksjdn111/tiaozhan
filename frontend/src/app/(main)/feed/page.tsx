@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Card, Button, Spin, Empty, Tag, message, Modal, Avatar, Divider } from 'antd'
-import { HeartOutlined, HeartFilled, ThunderboltOutlined, MessageOutlined, UserAddOutlined, UserOutlined } from '@ant-design/icons'
+import { Card, Button, Spin, Empty, Tag, message, Modal, Avatar, Divider, Input, Upload } from 'antd'
+import { HeartOutlined, HeartFilled, ThunderboltOutlined, MessageOutlined, UserAddOutlined, UserOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import { getToken, getUserId } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { API } from '@/lib/api'
 
@@ -20,16 +21,16 @@ export default function FeedPage() {
   const [userLoading, setUserLoading] = useState(false)
   const [friendStatus, setFriendStatus] = useState('')
   const [userBadges, setUserBadges] = useState<any[]>([])
+  const [postModalOpen, setPostModalOpen] = useState(false)
+  const [postNote, setPostNote] = useState('')
+  const [searchText, setSearchText] = useState('')
+  const [postPhoto, setPostPhoto] = useState<File | null>(null)
+  const [postPhotoPreview, setPostPhotoPreview] = useState('')
+  const [posting, setPosting] = useState(false)
 
-  const getToken = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    return session?.access_token || ''
-  }
+  const [currentUserId, setCurrentUserId] = useState('')
 
-  const getUserId = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    return session?.user?.id || ''
-  }
+  useEffect(() => { getToken().then(t => { if (!t) router.replace('/login') }); getUserId().then(id => { if (id) setCurrentUserId(id) }) }, [])
 
   const fetchFeed = async () => {
     try {
@@ -95,6 +96,44 @@ export default function FeedPage() {
     setUserLoading(false)
   }
 
+  const handleCreatePost = async () => {
+    if (!postNote.trim()) { message.error('请输入内容'); return }
+    setPosting(true)
+    const token = await getToken()
+    let photoUrl = ''
+    if (postPhoto) {
+      const userId = await getUserId()
+      const ext = postPhoto.name.split('.').pop()
+      const path = `feed/${userId}_${Date.now()}.${ext}`
+      const { error: uploadErr } = await supabase.storage.from('challenge-photos').upload(path, postPhoto, { upsert: true })
+      if (uploadErr) { message.error('图片上传失败'); setPosting(false); return }
+      const { data: { publicUrl } } = supabase.storage.from('challenge-photos').getPublicUrl(path)
+      photoUrl = publicUrl
+    }
+    const note = JSON.stringify({ custom: true, title: '分享动态', description: postNote.trim(), user_note: postNote.trim() })
+    const res = await fetch(`${API}/challenge/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ challenge_id: 0, status: 'done', note, photo_url: photoUrl }),
+    })
+    const data = await res.json()
+    if (data.code === 0) { message.success('发布成功'); setPostModalOpen(false); setPostNote(''); setPostPhoto(null); setPostPhotoPreview(''); fetchFeed() }
+    else message.error(data.message || '发布失败')
+    setPosting(false)
+  }
+
+  const handleDeletePost = async (dcId: number) => {
+    Modal.confirm({ title: '确认删除', content: '删除后无法恢复，确定要删除吗？', okText: '删除', okType: 'danger', cancelText: '取消',
+      onOk: async () => {
+        const token = await getToken()
+        const res = await fetch(`${API}/feed/delete-post/${dcId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
+        const data = await res.json()
+        if (data.code === 0) { message.success('已删除'); setFeed(feed.filter(i => i.id !== dcId)) }
+        else message.error(data.message || '删除失败')
+      }
+    })
+  }
+
   const handleAddFriend = async (targetId: string) => {
     const token = await getToken()
     const res = await fetch(`${API}/friends/request`, {
@@ -131,9 +170,16 @@ export default function FeedPage() {
     <div style={{ padding: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
         <ThunderboltOutlined style={{ fontSize: 22, color: '#667eea' }} />
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>挑战广场</h2>
+        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, flex: 1 }}>挑战广场</h2>
+        <Input.Search placeholder="搜索帖子..." value={searchText} onChange={e => setSearchText(e.target.value)} style={{ width: 160 }} size="small" />
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => setPostModalOpen(true)}
+          style={{ borderRadius: 10, border: 'none', height: 36 }} size="small">发布</Button>
       </div>
-      {feed.map(item => (
+      {(searchText ? feed.filter(item =>
+        (item.profile?.username || '').includes(searchText) ||
+        (item.challenge?.title || '').includes(searchText) ||
+        ((item._is_custom ? item._user_note : item.note) || '').includes(searchText)
+      ) : feed).map(item => (
         <Card key={item.id} style={{
           borderRadius: 14, marginBottom: 12,
           boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
@@ -159,9 +205,15 @@ export default function FeedPage() {
                 {item.profile?.username || '匿名用户'}
               </span>
             </div>
-            <Tag color={difficultyColors[item.challenge?.difficulty] || 'default'} style={{ borderRadius: 6 }}>
-              {item.challenge?.category}
-            </Tag>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              {currentUserId === item.user_id && (
+                <Button type="text" size="small" icon={<DeleteOutlined />} danger
+                  onClick={(e) => { e.stopPropagation(); handleDeletePost(item.id) }} />
+              )}
+              <Tag color={difficultyColors[item.challenge?.difficulty] || 'default'} style={{ borderRadius: 6 }}>
+                {item.challenge?.category}
+              </Tag>
+            </div>
           </div>
           <div style={{ cursor: 'pointer' }} onClick={() => router.push(`/feed/${item.id}`)}>
             <h4 style={{ margin: '0 0 4px', fontSize: 15 }}>{item.challenge?.title}</h4>
@@ -185,6 +237,16 @@ export default function FeedPage() {
           </div>
         </Card>
       ))}
+
+      {/* Create post modal */}
+      <Modal title="发布动态" open={postModalOpen} onCancel={() => { setPostModalOpen(false); setPostNote(''); setPostPhoto(null); setPostPhotoPreview('') }}
+        onOk={handleCreatePost} confirmLoading={posting} okText="发布" centered>
+        <Input.TextArea value={postNote} onChange={e => setPostNote(e.target.value)} placeholder="说说你在做什么..." rows={4} maxLength={500} showCount style={{ borderRadius: 10, marginBottom: 12 }} />
+        <Upload showUploadList={false} beforeUpload={(f) => { setPostPhoto(f); setPostPhotoPreview(URL.createObjectURL(f)); return false }} accept="image/*">
+          <Button icon={<PlusOutlined />} style={{ borderRadius: 8 }}>{postPhoto ? '换一张' : '添加图片'}</Button>
+        </Upload>
+        {postPhotoPreview && <img src={postPhotoPreview} alt="preview" style={{ width: '100%', borderRadius: 10, marginTop: 8, maxHeight: 200, objectFit: 'cover' }} />}
+      </Modal>
 
       {/* User profile modal */}
       <Modal open={userModalOpen} onCancel={() => { setUserModalOpen(false); setUserProfile(null); setUserBadges([]) }} footer={null}

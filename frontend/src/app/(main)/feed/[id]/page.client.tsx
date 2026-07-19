@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Card, Button, Spin, Empty, Tag, message, Input, Divider, Modal } from 'antd'
-import { HeartOutlined, HeartFilled, ArrowLeftOutlined, SendOutlined, UserAddOutlined, ClockCircleOutlined, MessageOutlined, TrophyOutlined } from '@ant-design/icons'
+import { Card, Button, Spin, Empty, Tag, message, Input, Divider, Modal, Upload } from 'antd'
+import { HeartOutlined, HeartFilled, ArrowLeftOutlined, SendOutlined, UserAddOutlined, ClockCircleOutlined, MessageOutlined, TrophyOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import { supabase } from '@/lib/supabase'
+import { getToken, getUserId } from '@/lib/auth'
 import { API } from '@/lib/api'
 
 const difficultyColors: Record<number, string> = { 1: '#52c41a', 2: '#13c2c2', 3: '#fa8c16', 4: '#f5222d', 5: '#722ed1' }
@@ -21,21 +22,16 @@ export default function FeedDetailPage() {
   const [commentText, setCommentText] = useState('')
   const [commentLoading, setCommentLoading] = useState(false)
   const [replyTo, setReplyTo] = useState<any>(null)
+  const [commentPhoto, setCommentPhoto] = useState<File | null>(null)
+  const [commentPhotoPreview, setCommentPhotoPreview] = useState('')
   const [userModalOpen, setUserModalOpen] = useState(false)
   const [userProfile, setUserProfile] = useState<any>(null)
   const [userBadges, setUserBadges] = useState<any[]>([])
   const [userLoading, setUserLoading] = useState(false)
   const [friendStatus, setFriendStatus] = useState('')
 
-  const getToken = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    return session?.access_token || ''
-  }
-
-  const getUserId = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    return session?.user?.id || ''
-  }
+  const [currentUserId, setCurrentUserId] = useState('')
+  useEffect(() => { getUserId().then(setCurrentUserId) }, [])
 
   const fetchDetail = async () => {
     try {
@@ -66,15 +62,27 @@ export default function FeedDetailPage() {
     if (!commentText.trim()) return
     setCommentLoading(true)
     const token = await getToken()
+    let photoUrl = ''
+    if (commentPhoto) {
+      const uid = await getUserId()
+      const ext = commentPhoto.name.split('.').pop()
+      const path = `comments/${uid}_${Date.now()}.${ext}`
+      const { error: uploadErr } = await supabase.storage.from('challenge-photos').upload(path, commentPhoto, { upsert: true })
+      if (!uploadErr) {
+        const { data: { publicUrl } } = supabase.storage.from('challenge-photos').getPublicUrl(path)
+        photoUrl = publicUrl
+      }
+    }
     const body: any = { daily_challenge_id: item.id, content: commentText.trim() }
     if (replyTo) body.parent_id = replyTo.id
+    if (photoUrl) body.photo_url = photoUrl
     const res = await fetch(`${API}/feed/comment`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(body)
     })
     const data = await res.json()
-    if (data.code === 0) { setCommentText(''); setReplyTo(null); fetchDetail() }
+    if (data.code === 0) { setCommentText(''); setCommentPhoto(null); setCommentPhotoPreview(''); setReplyTo(null); fetchDetail() }
     else message.error(data.message || '评论失败')
     setCommentLoading(false)
   }
@@ -102,6 +110,30 @@ export default function FeedDetailPage() {
       if (fd.code === 0) setFriendStatus(fd.data.status)
     }
     setUserLoading(false)
+  }
+
+  const handleDeletePost = () => {
+    Modal.confirm({ title: '确认删除', content: '删除后无法恢复', okText: '删除', okType: 'danger', cancelText: '取消',
+      onOk: async () => {
+        const token = await getToken()
+        const res = await fetch(`${API}/feed/delete-post/${item.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
+        const data = await res.json()
+        if (data.code === 0) { message.success('已删除'); router.back() }
+        else message.error(data.message || '删除失败')
+      }
+    })
+  }
+
+  const handleDeleteComment = async (commentId: number) => {
+    Modal.confirm({ title: '确认删除', content: '删除后无法恢复', okText: '删除', okType: 'danger', cancelText: '取消',
+      onOk: async () => {
+        const token = await getToken()
+        const res = await fetch(`${API}/feed/delete-comment/${commentId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
+        const data = await res.json()
+        if (data.code === 0) { message.success('已删除'); fetchDetail() }
+        else message.error(data.message || '删除失败')
+      }
+    })
   }
 
   const handleAddFriend = async (targetId: string) => {
@@ -179,6 +211,9 @@ export default function FeedDetailPage() {
           <span style={{ fontSize: 15, marginLeft: 4 }}>{item.like_count || 0}</span>
         </Button>
         <span style={{ color: '#999', fontSize: 13 }}><ClockCircleOutlined /> {item.date}</span>
+        {currentUserId === item.user_id && (
+          <Button type="text" icon={<DeleteOutlined />} danger onClick={handleDeletePost} style={{ marginLeft: 'auto' }}>删除</Button>
+        )}
       </div>
 
       <Divider style={{ margin: '12px 0' }} />
@@ -203,12 +238,17 @@ export default function FeedDetailPage() {
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, cursor: 'pointer' }} onClick={() => openUserProfile(c.user_id)}>{c.profile?.username}</div>
                 <div style={{ fontSize: 14, color: '#333', lineHeight: 1.6, marginTop: 2 }}>{c.content}</div>
-                <div style={{ display: 'flex', gap: 12, marginTop: 2 }}>
+                {c.photo_url && <img src={c.photo_url} alt="comment pic" style={{ width: '100%', borderRadius: 8, marginTop: 4, maxHeight: 200, objectFit: 'cover' }} />}
+                <div style={{ display: 'flex', gap: 12, marginTop: 2, alignItems: 'center' }}>
                   <span style={{ fontSize: 11, color: '#bbb' }}>{new Date(c.created_at).toLocaleString('zh-CN')}</span>
                   <Button type="link" size="small" style={{ fontSize: 11, padding: 0 }}
                     onClick={() => setReplyTo({ id: c.id, username: c.profile?.username })}>
                     回复
                   </Button>
+                  {currentUserId === c.user_id && (
+                    <Button type="link" size="small" danger style={{ fontSize: 11, padding: 0 }}
+                      onClick={() => handleDeleteComment(c.id)}>删除</Button>
+                  )}
                 </div>
               </div>
             </div>
@@ -227,7 +267,12 @@ export default function FeedDetailPage() {
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, cursor: 'pointer' }} onClick={() => openUserProfile(r.user_id)}>{r.profile?.username}</div>
                   <div style={{ fontSize: 13, color: '#333', lineHeight: 1.5, marginTop: 1 }}>{r.content}</div>
+                  {r.photo_url && <img src={r.photo_url} alt="comment pic" style={{ maxWidth: 160, borderRadius: 8, marginTop: 4, maxHeight: 120, objectFit: 'cover' }} />}
                   <span style={{ fontSize: 11, color: '#bbb' }}>{new Date(r.created_at).toLocaleString('zh-CN')}</span>
+                  {currentUserId === r.user_id && (
+                    <Button type="link" size="small" danger style={{ fontSize: 11, padding: 0, marginLeft: 8 }}
+                      onClick={() => handleDeleteComment(r.id)}>删除</Button>
+                  )}
                 </div>
               </div>
             ))}
@@ -243,13 +288,24 @@ export default function FeedDetailPage() {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 8, position: 'sticky', bottom: 0, background: '#f5f7fa', padding: '8px 0' }}>
-        <Input value={commentText} onChange={e => setCommentText(e.target.value)}
-          placeholder={replyTo ? `回复 @${replyTo.username}...` : "写下你的评论..."} maxLength={500}
-          style={{ borderRadius: 10, flex: 1 }}
-          onPressEnter={handleComment} />
-        <Button type="primary" icon={<SendOutlined />} loading={commentLoading}
-          onClick={handleComment} style={{ borderRadius: 10, border: 'none' }}>发送</Button>
+      <div style={{ position: 'sticky', bottom: 0, background: '#f5f7fa', padding: '8px 0' }}>
+        {commentPhotoPreview && (
+          <div style={{ position: 'relative', display: 'inline-block', marginBottom: 6 }}>
+            <img src={commentPhotoPreview} alt="preview" style={{ width: 60, height: 60, borderRadius: 8, objectFit: 'cover' }} />
+            <Button type="link" size="small" danger style={{ position: 'absolute', top: -4, right: -4 }} onClick={() => { setCommentPhoto(null); setCommentPhotoPreview('') }}>×</Button>
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Upload showUploadList={false} beforeUpload={(f) => { setCommentPhoto(f); setCommentPhotoPreview(URL.createObjectURL(f)); return false }} accept="image/*">
+            <Button icon={<PlusOutlined />} size="small" style={{ borderRadius: 8, border: 'none' }} />
+          </Upload>
+          <Input value={commentText} onChange={e => setCommentText(e.target.value)}
+            placeholder={replyTo ? `回复 @${replyTo.username}...` : "写下你的评论..."} maxLength={500}
+            style={{ borderRadius: 10, flex: 1 }}
+            onPressEnter={handleComment} />
+          <Button type="primary" icon={<SendOutlined />} loading={commentLoading}
+            onClick={handleComment} style={{ borderRadius: 10, border: 'none' }}>发送</Button>
+        </div>
       </div>
 
       {/* User profile modal with badges */}

@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from services.supabase_client import get_auth_supabase
+from services.supabase_client import get_auth_supabase, get_supabase
 from utils.auth import get_current_user
 
 auth_bp = Blueprint('auth', __name__)
@@ -59,6 +59,16 @@ def get_profile():
     supabase = get_auth_supabase()
     profile = supabase.from_('profiles').select('*').eq('id', user_id).single().execute()
     return jsonify({'code': 0, 'data': profile.data})
+
+@auth_bp.route('/check-username', methods=['GET'])
+def check_username():
+    username = request.args.get('username', '').strip()
+    if not username:
+        return jsonify({'code': 1, 'message': '用户名不能为空'}), 400
+    supabase = get_supabase()
+    result = supabase.from_('profiles').select('id').eq('username', username).limit(1).execute()
+    return jsonify({'code': 0, 'data': {'exists': len(result.data or []) > 0}})
+
 
 @auth_bp.route('/profile', methods=['PUT'])
 def update_profile():

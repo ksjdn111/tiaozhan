@@ -249,6 +249,31 @@ def get_conversations():
     return jsonify({'code': 0, 'data': list(conversations.values())})
 
 
+@friends_bp.route('/delete', methods=['POST'])
+def delete_friend():
+    user_id = get_current_user()
+    if not user_id:
+        return jsonify({'code': 1, 'message': '未授权'}), 401
+
+    data = request.get_json()
+    target_id = data.get('friend_id')
+    if not target_id:
+        return jsonify({'code': 1, 'message': '缺少好友ID'}), 400
+
+    supabase = get_auth_supabase()
+    result = supabase.from_('friends').select('id').or_(
+        f'requester_id.eq.{user_id},addressee_id.eq.{user_id}'
+    ).execute()
+
+    for f in result.data or []:
+        ids = {str(f['requester_id']), str(f['addressee_id'])}
+        if str(user_id) in ids and str(target_id) in ids:
+            supabase.from_('friends').delete().eq('id', f['id']).execute()
+            return jsonify({'code': 0, 'message': '好友已删除'})
+
+    return jsonify({'code': 1, 'message': '未找到该好友关系'}), 404
+
+
 @friends_bp.route('/unread-count', methods=['GET'])
 def get_unread_count():
     user_id = get_current_user()

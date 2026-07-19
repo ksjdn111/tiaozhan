@@ -135,6 +135,81 @@ def get_detail(dc_id):
     return jsonify({'code': 0, 'data': item})
 
 
+@feed_bp.route('/comment-like', methods=['POST'])
+def comment_like():
+    user_id = get_current_user()
+    if not user_id:
+        return jsonify({'code': 1, 'message': '未授权'}), 401
+    data = request.get_json()
+    comment_id = data.get('comment_id')
+    if not comment_id:
+        return jsonify({'code': 1, 'message': '缺少comment_id'}), 400
+    supabase = get_auth_supabase()
+    existing = supabase.from_('comment_likes').select('id').eq('comment_id', comment_id).eq('user_id', user_id).execute()
+    curr = supabase.from_('comments').select('like_count').eq('id', comment_id).execute()
+    curr_likes = curr.data[0]['like_count'] if curr.data else 0
+    if existing.data:
+        supabase.from_('comment_likes').delete().eq('id', existing.data[0]['id']).execute()
+        supabase.from_('comments').update({'like_count': max(0, curr_likes - 1)}).eq('id', comment_id).execute()
+        return jsonify({'code': 0, 'liked': False})
+    else:
+        supabase.from_('comment_likes').insert({'comment_id': comment_id, 'user_id': user_id}).execute()
+        supabase.from_('comments').update({'like_count': curr_likes + 1}).eq('id', comment_id).execute()
+        return jsonify({'code': 0, 'liked': True})
+
+
+@feed_bp.route('/my-comments', methods=['GET'])
+def my_comments():
+    user_id = get_current_user()
+    if not user_id:
+        return jsonify({'code': 1, 'message': '未授权'}), 401
+    supabase = get_auth_supabase()
+    result = supabase.from_('comments').select('*').eq('user_id', user_id).order('created_at', desc=True).limit(50).execute()
+    return jsonify({'code': 0, 'data': result.data or []})
+
+
+@feed_bp.route('/delete-post/<int:dc_id>', methods=['DELETE'])
+def delete_post(dc_id):
+    user_id = get_current_user()
+    if not user_id:
+        return jsonify({'code': 1, 'message': '未授权'}), 401
+    supabase = get_auth_supabase()
+    post = supabase.from_('daily_challenges').select('user_id').eq('id', dc_id).single().execute()
+    if not post.data or str(post.data['user_id']) != str(user_id):
+        return jsonify({'code': 1, 'message': '无权删除'}), 403
+    supabase.from_('daily_challenges').delete().eq('id', dc_id).execute()
+    return jsonify({'code': 0, 'message': '已删除'})
+
+
+@feed_bp.route('/my-posts', methods=['GET'])
+def my_posts():
+    user_id = get_current_user()
+    if not user_id:
+        return jsonify({'code': 1, 'message': '未授权'}), 401
+    supabase = get_auth_supabase()
+    result = supabase.from_('daily_challenges').select('*').eq('user_id', user_id).order('created_at', desc=True).limit(50).execute()
+    posts = []
+    for row in result.data or []:
+        item = dict(row)
+        item['profile'] = None
+        _merge_custom_note(item)
+        posts.append(item)
+    return jsonify({'code': 0, 'data': posts})
+
+
+@feed_bp.route('/delete-comment/<int:comment_id>', methods=['DELETE'])
+def delete_comment(comment_id):
+    user_id = get_current_user()
+    if not user_id:
+        return jsonify({'code': 1, 'message': '未授权'}), 401
+    supabase = get_auth_supabase()
+    comment = supabase.from_('comments').select('user_id').eq('id', comment_id).single().execute()
+    if not comment.data or str(comment.data['user_id']) != str(user_id):
+        return jsonify({'code': 1, 'message': '无权删除'}), 403
+    supabase.from_('comments').delete().eq('id', comment_id).execute()
+    return jsonify({'code': 0, 'message': '已删除'})
+
+
 @feed_bp.route('/comment', methods=['POST'])
 def add_comment():
     user_id = get_current_user()
@@ -159,6 +234,9 @@ def add_comment():
     }
     if parent_id:
         insert_data['parent_id'] = parent_id
+    photo_url = data.get('photo_url')
+    if photo_url:
+        insert_data['photo_url'] = photo_url
     supabase.from_('comments').insert(insert_data).execute()
 
     return jsonify({'code': 0, 'message': '评论成功'})
@@ -188,6 +266,7 @@ def get_notifications():
             notifications.append({
                 'type': 'like',
                 'user': l.get('profile', {}),
+                'daily_challenge_id': l['daily_challenge_id'],
                 'challenge_title': dc.data.get('challenge', {}).get('title', '') if dc.data else '',
                 'created_at': l['created_at']
             })
@@ -201,6 +280,7 @@ def get_notifications():
             notifications.append({
                 'type': 'comment',
                 'user': c.get('profile', {}),
+                'daily_challenge_id': c['daily_challenge_id'],
                 'challenge_title': dc.data.get('challenge', {}).get('title', '') if dc.data else '',
                 'content': c['content'],
                 'created_at': c['created_at']

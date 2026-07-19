@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button, Spin, Empty, message, Modal, Input, List, Avatar, Tag, Badge, Tabs } from 'antd'
-import { UserAddOutlined, UserOutlined, MessageOutlined, TeamOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons'
-import { supabase } from '@/lib/supabase'
+import { UserAddOutlined, UserOutlined, MessageOutlined, TeamOutlined, CheckOutlined, CloseOutlined, DeleteOutlined } from '@ant-design/icons'
+import { getToken } from '@/lib/auth'
 import { API } from '@/lib/api'
 
 export default function FriendsPage() {
@@ -19,10 +19,7 @@ export default function FriendsPage() {
   const [searching, setSearching] = useState(false)
   const [tabKey, setTabKey] = useState('friends')
 
-  const getToken = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    return session?.access_token || ''
-  }
+  // getToken imported from @/lib/auth
 
   const fetchData = async () => {
     try {
@@ -122,7 +119,10 @@ export default function FriendsPage() {
                 actions={[
                   <Button key="chat" type="text" icon={<MessageOutlined />}
                     onClick={() => router.push(`/friends/chat?id=${f.friend_id}&name=${encodeURIComponent(f.username)}`)}
-                    style={{ color: '#667eea' }} />
+                    style={{ color: '#667eea' }} />,
+                  <Button key="delete" type="text" icon={<DeleteOutlined />}
+                    onClick={async () => { const token = await getToken(); await fetch(`${API}/friends/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ friend_id: f.friend_id }) }); message.success('已删除'); fetchData() }}
+                    style={{ color: '#ff4d4f' }} />
                 ]}>
                 <List.Item.Meta
                   avatar={f.avatar_url ? (

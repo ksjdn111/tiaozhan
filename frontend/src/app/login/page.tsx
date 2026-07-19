@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Card, Form, Input, Button, Tabs, Progress, message } from 'antd'
 import { UserOutlined, LockOutlined, MailOutlined, CheckCircleFilled, CloseCircleFilled, ThunderboltOutlined } from '@ant-design/icons'
 import { supabase } from '@/lib/supabase'
+import { API } from '@/lib/api'
 
 const authErrors: Record<string, string> = {
   'Invalid login credentials': '邮箱或密码错误',
@@ -94,6 +95,13 @@ export default function LoginPage() {
     if (Object.values(checks).some(v => !v)) return
 
     setLoading(true)
+    const checkRes = await fetch(`${API}/auth/check-username?username=${encodeURIComponent(values.username)}`)
+    const checkData = await checkRes.json()
+    if (checkData.code === 0 && checkData.data?.exists) {
+      setLoading(false)
+      message.error('用户名已被使用')
+      return
+    }
     const { data, error } = await supabase.auth.signUp({
       email: values.email,
       password: values.password,

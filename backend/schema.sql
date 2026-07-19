@@ -170,6 +170,15 @@ CREATE TABLE IF NOT EXISTS comments (
 CREATE INDEX IF NOT EXISTS idx_comments_dc ON comments(daily_challenge_id);
 CREATE INDEX IF NOT EXISTS idx_comments_parent ON comments(parent_id);
 
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS photo_url TEXT DEFAULT '';
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS like_count INTEGER DEFAULT 0;
+CREATE TABLE IF NOT EXISTS comment_likes (
+  id SERIAL PRIMARY KEY,
+  comment_id INTEGER NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(comment_id, user_id)
+);
 ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "comments_select" ON comments FOR SELECT USING (true);
 CREATE POLICY "comments_insert" ON comments FOR INSERT WITH CHECK (auth.uid() = user_id);

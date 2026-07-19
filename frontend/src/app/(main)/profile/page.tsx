@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Card, Button, Spin, Statistic, Row, Col, Empty, message, List, Tag, Modal, Input, Upload, Avatar, Divider } from 'antd'
-import { LogoutOutlined, TrophyOutlined, EditOutlined, UserOutlined, FireOutlined, CheckCircleOutlined, HeartOutlined, SettingOutlined, SmileOutlined, BellOutlined, HeartFilled, MessageFilled } from '@ant-design/icons'
+import { Card, Button, Spin, Statistic, Row, Col, Empty, message, List, Tag, Modal, Input, Upload, Avatar, Divider, Tabs } from 'antd'
+import { LogoutOutlined, TrophyOutlined, EditOutlined, UserOutlined, FireOutlined, CheckCircleOutlined, HeartOutlined, SettingOutlined, SmileOutlined, BellOutlined, HeartFilled, MessageFilled, DeleteOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { getToken, getUserId } from '@/lib/auth'
 import { API } from '@/lib/api'
 
 export default function ProfilePage() {
@@ -28,15 +29,9 @@ export default function ProfilePage() {
   const [notifications, setNotifications] = useState<any[]>([])
   const [notifOpen, setNotifOpen] = useState(false)
 
-  const getToken = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    return session?.access_token || ''
-  }
-
-  const getUserId = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    return session?.user?.id || ''
-  }
+  const [myPosts, setMyPosts] = useState<any[]>([])
+  const [myComments, setMyComments] = useState<any[]>([])
+  const [postsLoading, setPostsLoading] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -44,13 +39,15 @@ export default function ProfilePage() {
         const token = await getToken()
         if (!token) { setError('未登录，请重新登录'); setLoading(false); return }
 
-        const [profileRes, statsRes, badgesRes, historyRes, allBadgesRes, notifRes] = await Promise.all([
+        const [profileRes, statsRes, badgesRes, historyRes, allBadgesRes, notifRes, postsRes, commentsRes] = await Promise.all([
           fetch(`${API}/auth/profile`, { headers: { Authorization: `Bearer ${token}` } }),
           fetch(`${API}/badges/stats`, { headers: { Authorization: `Bearer ${token}` } }),
           fetch(`${API}/badges/user`, { headers: { Authorization: `Bearer ${token}` } }),
           fetch(`${API}/challenge/history?size=5`, { headers: { Authorization: `Bearer ${token}` } }),
           fetch(`${API}/badges/list`, { headers: { Authorization: `Bearer ${token}` } }),
           fetch(`${API}/feed/notifications`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${API}/feed/my-posts`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${API}/feed/my-comments`, { headers: { Authorization: `Bearer ${token}` } }),
         ])
         const profileData = await profileRes.json()
         const statsData = await statsRes.json()
@@ -58,6 +55,8 @@ export default function ProfilePage() {
         const historyData = await historyRes.json()
         const allBadgesData = await allBadgesRes.json()
         const notifData = await notifRes.json()
+        const postsData = await postsRes.json()
+        const commentsData = await commentsRes.json()
 
         if (profileData.code === 0) setProfile(profileData.data)
         if (statsData.code === 0) setStats(statsData.data)
@@ -65,6 +64,8 @@ export default function ProfilePage() {
         if (historyData.code === 0) setHistory(historyData.data)
         if (allBadgesData.code === 0) setAllBadges(allBadgesData.data)
         if (notifData.code === 0) setNotifications(notifData.data)
+        if (postsData.code === 0) setMyPosts(postsData.data)
+        if (commentsData.code === 0) setMyComments(commentsData.data)
         if (profileData.code !== 0) setError(profileData.message || '获取个人信息失败')
       } catch {
         setError('网络错误，请确认后端服务已启动')
@@ -310,6 +311,35 @@ export default function ProfilePage() {
           }
         </Card>
 
+        {/* My Posts & Comments */}
+        <Card style={{ borderRadius: 14, marginBottom: 12, border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+          <Tabs defaultActiveKey="posts" items={[
+            { key: 'posts', label: `我的帖子 (${myPosts.length})`, children: myPosts.length === 0 ? <Empty description="暂无帖子" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : <List dataSource={myPosts} renderItem={(p: any) => (
+              <List.Item style={{ padding: '8px 0' }}
+                actions={[
+                  <Button key="view" type="link" size="small" onClick={() => router.push(`/feed/${p.id}`)}>查看</Button>,
+                  <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={async () => { Modal.confirm({ title: '确认删除', okText: '删除', okType: 'danger', cancelText: '取消', onOk: async () => { const t = await getToken(); await fetch(`${API}/feed/delete-post/${p.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${t}` } }); message.success('已删除'); setMyPosts(myPosts.filter(x => x.id !== p.id)) } }) }}>
+                    删除
+                  </Button>
+                ]}>
+                <List.Item.Meta title={<span style={{ fontSize: 14, cursor: 'pointer' }} onClick={() => router.push(`/feed/${p.id}`)}>{p.challenge?.title || '自定义挑战'}</span>}
+                  description={<span style={{ fontSize: 12, color: '#999' }}>{p.date} · {p.like_count || 0} 赞 · {p.comment_count || 0} 评论</span>} />
+              </List.Item>
+            )} /> },
+            { key: 'comments', label: `我的评论 (${myComments.length})`, children: myComments.length === 0 ? <Empty description="暂无评论" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : <List dataSource={myComments} renderItem={(c: any) => (
+              <List.Item style={{ padding: '8px 0' }}
+                actions={[
+                  <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={async () => { Modal.confirm({ title: '确认删除', okText: '删除', okType: 'danger', cancelText: '取消', onOk: async () => { const t = await getToken(); await fetch(`${API}/feed/delete-comment/${c.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${t}` } }); message.success('已删除'); setMyComments(myComments.filter(x => x.id !== c.id)) } }) }}>
+                    删除
+                  </Button>
+                ]}>
+                <List.Item.Meta title={<span style={{ fontSize: 14 }}>{c.content}</span>}
+                  description={<span style={{ fontSize: 12, color: '#999' }}>{new Date(c.created_at).toLocaleString('zh-CN')}</span>} />
+              </List.Item>
+            )} /> },
+          ]} />
+        </Card>
+
         {/* Logout */}
         <div style={{ textAlign: 'center', marginTop: 24, marginBottom: 16 }}>
           <Button danger icon={<LogoutOutlined />} onClick={handleLogout} style={{ borderRadius: 10, height: 40, width: '100%', maxWidth: 200 }}>
@@ -324,7 +354,7 @@ export default function ProfilePage() {
           <Empty description="暂无互动" image={Empty.PRESENTED_IMAGE_SIMPLE} />
         ) : (
           <List dataSource={notifications} renderItem={(n: any) => (
-            <List.Item style={{ padding: '10px 0' }}>
+            <List.Item style={{ padding: '10px 0', cursor: 'pointer' }} onClick={() => { setNotifOpen(false); router.push(`/feed/${n.daily_challenge_id}`) }}>
               <List.Item.Meta
                 avatar={n.user?.avatar_url ? <Avatar src={n.user.avatar_url} size={36} /> : (
                   <Avatar size={36} style={{ background: 'linear-gradient(135deg, #667eea, #764ba2)' }}>
