@@ -1,3 +1,4 @@
+import time
 from flask import request, g
 import jwt as pyjwt
 from typing import Optional
@@ -8,6 +9,9 @@ def get_current_user() -> Optional[str]:
         return None
     try:
         payload = pyjwt.decode(token, options={"verify_signature": False})
+        exp = payload.get('exp', 0)
+        if exp and exp < time.time():
+            return None
         user_id = payload.get('sub')
         if user_id:
             g.jwt_token = token

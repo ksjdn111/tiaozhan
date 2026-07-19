@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Button, Spin, Empty, message, Input, Avatar } from 'antd'
-import { ArrowLeftOutlined, SendOutlined, UserOutlined } from '@ant-design/icons'
+import { Button, Spin, Empty, message, Input, Avatar, Upload, Modal } from 'antd'
+import { ArrowLeftOutlined, SendOutlined, UserOutlined, PlusOutlined, CloseCircleOutlined } from '@ant-design/icons'
 import { supabase } from '@/lib/supabase'
+import { getToken, getUserId } from '@/lib/auth'
 import { API } from '@/lib/api'
 
 export default function ChatPage() {
@@ -18,10 +19,9 @@ export default function ChatPage() {
   const [msgText, setMsgText] = useState('')
   const chatEndRef = useRef<HTMLDivElement>(null)
 
-  const getToken = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    return session?.access_token || ''
-  }
+  const [chatPhoto, setChatPhoto] = useState<File | null>(null)
+  const [chatPhotoPreview, setChatPhotoPreview] = useState('')
+  const [lightboxUrl, setLightboxUrl] = useState('')
 
   const fetchMessages = async () => {
     if (!friendId) return
@@ -44,20 +44,31 @@ export default function ChatPage() {
   }, [messages])
 
   const handleSend = async () => {
-    if (!msgText.trim()) return
+    if (!msgText.trim() && !chatPhoto) return
     const token = await getToken()
+    let photoUrl = ''
+    if (chatPhoto) {
+      const uid = await getUserId()
+      const ext = chatPhoto.name.split('.').pop()
+      const path = `chat/${uid}_${Date.now()}.${ext}`
+      const { error: uploadErr } = await supabase.storage.from('challenge-photos').upload(path, chatPhoto, { upsert: true })
+      if (!uploadErr) {
+        const { data: { publicUrl } } = supabase.storage.from('challenge-photos').getPublicUrl(path)
+        photoUrl = publicUrl
+      }
+    }
     const res = await fetch(`${API}/friends/messages/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ receiver_id: friendId, content: msgText.trim() })
+      body: JSON.stringify({ receiver_id: friendId, content: msgText.trim(), photo_url: photoUrl })
     })
     const data = await res.json()
     if (data.code === 0) {
       setMessages([...messages, {
-        id: Date.now(), sender_id: 'me', content: msgText.trim(),
+        id: Date.now(), sender_id: 'me', content: msgText.trim(), photo_url: photoUrl,
         created_at: new Date().toISOString(), is_me: true
       }])
-      setMsgText('')
+      setMsgText(''); setChatPhoto(null); setChatPhotoPreview('')
     } else {
       message.error(data.message || '发送失败')
     }
@@ -92,7 +103,8 @@ export default function ChatPage() {
                 color: m.is_me ? '#fff' : '#333',
                 fontSize: 14, lineHeight: 1.6,
               }}>
-                {m.content}
+                {m.content && <div>{m.content}</div>}
+                {m.photo_url && <img src={m.photo_url} alt="chat pic" style={{ maxWidth: 200, borderRadius: 8, marginTop: 4, cursor: 'pointer' }} onClick={() => setLightboxUrl(m.photo_url)} />}
                 <div style={{ fontSize: 10, opacity: 0.6, marginTop: 4, textAlign: 'right' }}>
                   {new Date(m.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
                 </div>
@@ -103,15 +115,32 @@ export default function ChatPage() {
         <div ref={chatEndRef} />
       </div>
 
-      <div style={{ display: 'flex', gap: 8, paddingTop: 8, borderTop: '1px solid #f0f0f0' }}>
-        <Input value={msgText} onChange={e => setMsgText(e.target.value)}
-          placeholder="输入消息..." maxLength={1000}
-          style={{ borderRadius: 10, flex: 1 }}
-          onPressEnter={handleSend}
-        />
-        <Button type="primary" icon={<SendOutlined />} onClick={handleSend}
-          style={{ borderRadius: 10, border: 'none' }} />
+      <div style={{ paddingTop: 8, borderTop: '1px solid #f0f0f0' }}>
+        {chatPhotoPreview && (
+          <div style={{ position: 'relative', display: 'inline-block', marginBottom: 6, marginLeft: 4 }}>
+            <img src={chatPhotoPreview} alt="preview" style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover' }} />
+            <CloseCircleOutlined style={{ position: 'absolute', top: -4, right: -4, fontSize: 14, color: '#ff4d4f', cursor: 'pointer' }}
+              onClick={() => { setChatPhoto(null); setChatPhotoPreview('') }} />
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Upload showUploadList={false} beforeUpload={(f) => { setChatPhoto(f); setChatPhotoPreview(URL.createObjectURL(f)); return false }} accept="image/*">
+            <Button icon={<PlusOutlined />} size="small" style={{ borderRadius: 8 }} />
+          </Upload>
+          <Input value={msgText} onChange={e => setMsgText(e.target.value)}
+            placeholder={chatPhoto ? '可补充文字...' : '输入消息...'} maxLength={1000}
+            style={{ borderRadius: 10, flex: 1 }}
+            onPressEnter={handleSend}
+          />
+          <Button type="primary" icon={<SendOutlined />} onClick={handleSend}
+            style={{ borderRadius: 10, border: 'none' }} />
+        </div>
       </div>
+
+      {/* Image lightbox */}
+      <Modal open={!!lightboxUrl} onCancel={() => setLightboxUrl('')} footer={null} centered width="90vw">
+        {lightboxUrl && <img src={lightboxUrl} alt="preview" style={{ width: '100%', borderRadius: 8 }} />}
+      </Modal>
     </div>
   )
 }

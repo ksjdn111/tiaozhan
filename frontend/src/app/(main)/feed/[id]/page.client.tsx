@@ -24,6 +24,7 @@ export default function FeedDetailPage() {
   const [replyTo, setReplyTo] = useState<any>(null)
   const [commentPhoto, setCommentPhoto] = useState<File | null>(null)
   const [commentPhotoPreview, setCommentPhotoPreview] = useState('')
+  const [lightboxUrl, setLightboxUrl] = useState('')
   const [userModalOpen, setUserModalOpen] = useState(false)
   const [userProfile, setUserProfile] = useState<any>(null)
   const [userBadges, setUserBadges] = useState<any[]>([])
@@ -201,7 +202,15 @@ export default function FeedDetailPage() {
           </div>
         </div>
         {(item._is_custom ? item._user_note : item.note) && <div style={{ background: '#f9f9f9', borderRadius: 10, padding: '10px 14px', margin: '8px 0' }}><p style={{ margin: 0, fontSize: 13, color: '#555', lineHeight: 1.6 }}>{item._is_custom ? item._user_note : item.note}</p></div>}
-        {item.photo_url && <img src={item.photo_url} alt="proof" style={{ width: '100%', borderRadius: 10, marginTop: 6, maxHeight: 320, objectFit: 'cover' }} />}
+        {(() => {
+          const urls: string[] = (() => { try { const p = JSON.parse(item.photo_url); return Array.isArray(p) ? p : [item.photo_url] } catch { return item.photo_url ? [item.photo_url] : [] } })()
+          return urls.length > 0 && <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+            {urls.map((url, i) => (
+              <img key={i} src={url} alt="proof" style={{ width: urls.length > 1 ? 'calc(33.33% - 4px)' : '100%', borderRadius: 10, maxHeight: 320, objectFit: 'cover', cursor: 'pointer' }}
+                onClick={() => setLightboxUrl(url)} />
+            ))}
+          </div>
+        })()}
       </Card>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 20, margin: '12px 0', padding: '0 4px' }}>
@@ -238,7 +247,7 @@ export default function FeedDetailPage() {
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, cursor: 'pointer' }} onClick={() => openUserProfile(c.user_id)}>{c.profile?.username}</div>
                 <div style={{ fontSize: 14, color: '#333', lineHeight: 1.6, marginTop: 2 }}>{c.content}</div>
-                {c.photo_url && <img src={c.photo_url} alt="comment pic" style={{ width: '100%', borderRadius: 8, marginTop: 4, maxHeight: 200, objectFit: 'cover' }} />}
+                {c.photo_url && <img src={c.photo_url} alt="comment pic" style={{ width: '100%', borderRadius: 8, marginTop: 4, maxHeight: 200, objectFit: 'cover', cursor: 'pointer' }} onClick={() => setLightboxUrl(c.photo_url)} />}
                 <div style={{ display: 'flex', gap: 12, marginTop: 2, alignItems: 'center' }}>
                   <span style={{ fontSize: 11, color: '#bbb' }}>{new Date(c.created_at).toLocaleString('zh-CN')}</span>
                   <Button type="link" size="small" style={{ fontSize: 11, padding: 0 }}
@@ -267,7 +276,7 @@ export default function FeedDetailPage() {
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, cursor: 'pointer' }} onClick={() => openUserProfile(r.user_id)}>{r.profile?.username}</div>
                   <div style={{ fontSize: 13, color: '#333', lineHeight: 1.5, marginTop: 1 }}>{r.content}</div>
-                  {r.photo_url && <img src={r.photo_url} alt="comment pic" style={{ maxWidth: 160, borderRadius: 8, marginTop: 4, maxHeight: 120, objectFit: 'cover' }} />}
+                  {r.photo_url && <img src={r.photo_url} alt="comment pic" style={{ maxWidth: 160, borderRadius: 8, marginTop: 4, maxHeight: 120, objectFit: 'cover', cursor: 'pointer' }} onClick={() => setLightboxUrl(r.photo_url)} />}
                   <span style={{ fontSize: 11, color: '#bbb' }}>{new Date(r.created_at).toLocaleString('zh-CN')}</span>
                   {currentUserId === r.user_id && (
                     <Button type="link" size="small" danger style={{ fontSize: 11, padding: 0, marginLeft: 8 }}
@@ -307,6 +316,11 @@ export default function FeedDetailPage() {
             onClick={handleComment} style={{ borderRadius: 10, border: 'none' }}>发送</Button>
         </div>
       </div>
+
+      {/* Image lightbox */}
+      <Modal open={!!lightboxUrl} onCancel={() => setLightboxUrl('')} footer={null} centered width="90vw">
+        {lightboxUrl && <img src={lightboxUrl} alt="preview" style={{ width: '100%', borderRadius: 8 }} />}
+      </Modal>
 
       {/* User profile modal with badges */}
       <Modal open={userModalOpen} onCancel={() => { setUserModalOpen(false); setUserProfile(null); setUserBadges([]) }} footer={null} centered width={380}>

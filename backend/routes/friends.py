@@ -180,13 +180,16 @@ def get_messages(friend_id):
 
     msgs = []
     for m in result.data:
-        msgs.append({
+        msg = {
             'id': m['id'],
             'sender_id': m['sender_id'],
             'content': m['content'],
             'created_at': m['created_at'],
             'is_me': str(m['sender_id']) == str(user_id)
-        })
+        }
+        if m.get('photo_url'):
+            msg['photo_url'] = m['photo_url']
+        msgs.append(msg)
 
     return jsonify({'code': 0, 'data': msgs})
 
@@ -200,18 +203,18 @@ def send_message():
     data = request.get_json()
     receiver_id = data.get('receiver_id')
     content = data.get('content', '').strip()
+    photo_url = data.get('photo_url', '').strip()
 
-    if not receiver_id or not content:
+    if not receiver_id or (not content and not photo_url):
         return jsonify({'code': 1, 'message': '参数不完整'}), 400
     if len(content) > 1000:
         return jsonify({'code': 1, 'message': '消息最长1000个字符'}), 400
 
     supabase = get_auth_supabase()
-    supabase.from_('messages').insert({
-        'sender_id': str(user_id),
-        'receiver_id': str(receiver_id),
-        'content': content
-    }).execute()
+    insert_data = {'sender_id': str(user_id), 'receiver_id': str(receiver_id), 'content': content}
+    if photo_url:
+        insert_data['photo_url'] = photo_url
+    supabase.from_('messages').insert(insert_data).execute()
 
     return jsonify({'code': 0, 'message': '发送成功'})
 

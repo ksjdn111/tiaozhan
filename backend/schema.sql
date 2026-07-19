@@ -212,6 +212,7 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS photo_url TEXT DEFAULT '';
 
 CREATE INDEX IF NOT EXISTS idx_messages_participants ON messages(sender_id, receiver_id);
 CREATE INDEX IF NOT EXISTS idx_messages_unread ON messages(receiver_id, is_read);

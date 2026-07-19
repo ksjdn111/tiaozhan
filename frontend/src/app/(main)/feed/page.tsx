@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Card, Button, Spin, Empty, Tag, message, Modal, Avatar, Divider, Input, Upload } from 'antd'
-import { HeartOutlined, HeartFilled, ThunderboltOutlined, MessageOutlined, UserAddOutlined, UserOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import { Card, Button, Spin, Empty, Tag, message, Modal, Avatar, Divider, Input, Upload, Image } from 'antd'
+import { HeartOutlined, HeartFilled, ThunderboltOutlined, MessageOutlined, UserAddOutlined, UserOutlined, DeleteOutlined, PlusOutlined, CloseCircleOutlined, ZoomInOutlined } from '@ant-design/icons'
 import { getToken, getUserId } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { API } from '@/lib/api'
@@ -24,9 +24,10 @@ export default function FeedPage() {
   const [postModalOpen, setPostModalOpen] = useState(false)
   const [postNote, setPostNote] = useState('')
   const [searchText, setSearchText] = useState('')
-  const [postPhoto, setPostPhoto] = useState<File | null>(null)
-  const [postPhotoPreview, setPostPhotoPreview] = useState('')
+  const [postPhotos, setPostPhotos] = useState<File[]>([])
+  const [postPhotoPreviews, setPostPhotoPreviews] = useState<string[]>([])
   const [posting, setPosting] = useState(false)
+  const [lightboxUrl, setLightboxUrl] = useState('')
 
   const [currentUserId, setCurrentUserId] = useState('')
 
@@ -100,24 +101,24 @@ export default function FeedPage() {
     if (!postNote.trim()) { message.error('请输入内容'); return }
     setPosting(true)
     const token = await getToken()
-    let photoUrl = ''
-    if (postPhoto) {
-      const userId = await getUserId()
-      const ext = postPhoto.name.split('.').pop()
-      const path = `feed/${userId}_${Date.now()}.${ext}`
-      const { error: uploadErr } = await supabase.storage.from('challenge-photos').upload(path, postPhoto, { upsert: true })
+    const userId = await getUserId()
+    const photoUrls: string[] = []
+    for (const file of postPhotos) {
+      const ext = file.name.split('.').pop()
+      const path = `feed/${userId}_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+      const { error: uploadErr } = await supabase.storage.from('challenge-photos').upload(path, file, { upsert: true })
       if (uploadErr) { message.error('图片上传失败'); setPosting(false); return }
       const { data: { publicUrl } } = supabase.storage.from('challenge-photos').getPublicUrl(path)
-      photoUrl = publicUrl
+      photoUrls.push(publicUrl)
     }
     const note = JSON.stringify({ custom: true, title: '分享动态', description: postNote.trim(), user_note: postNote.trim() })
     const res = await fetch(`${API}/challenge/complete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ challenge_id: 0, status: 'done', note, photo_url: photoUrl }),
+      body: JSON.stringify({ challenge_id: 0, status: 'done', note, photo_url: photoUrls.length > 0 ? JSON.stringify(photoUrls) : '' }),
     })
     const data = await res.json()
-    if (data.code === 0) { message.success('发布成功'); setPostModalOpen(false); setPostNote(''); setPostPhoto(null); setPostPhotoPreview(''); fetchFeed() }
+    if (data.code === 0) { message.success('发布成功'); setPostModalOpen(false); setPostNote(''); setPostPhotos([]); setPostPhotoPreviews([]); fetchFeed() }
     else message.error(data.message || '发布失败')
     setPosting(false)
   }
@@ -218,11 +219,15 @@ export default function FeedPage() {
           <div style={{ cursor: 'pointer' }} onClick={() => router.push(`/feed/${item.id}`)}>
             <h4 style={{ margin: '0 0 4px', fontSize: 15 }}>{item.challenge?.title}</h4>
             {(item._is_custom ? item._user_note : item.note) && <p style={{ color: '#666', fontSize: 13, margin: '4px 0', lineHeight: 1.5 }}>{item._is_custom ? item._user_note : item.note}</p>}
-            {item.photo_url && (
-              <img src={item.photo_url} alt="challenge"
-                style={{ width: '100%', borderRadius: 10, marginTop: 6, maxHeight: 240, objectFit: 'cover' }}
-              />
-            )}
+            {(() => {
+              const urls: string[] = (() => { try { const p = JSON.parse(item.photo_url); return Array.isArray(p) ? p : [item.photo_url] } catch { return item.photo_url ? [item.photo_url] : [] } })()
+              return urls.length > 0 && <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                {urls.map((url, i) => (
+                  <img key={i} src={url} alt="challenge" style={{ width: urls.length > 1 ? 'calc(33.33% - 4px)' : '100%', borderRadius: 10, maxHeight: 240, objectFit: 'cover', cursor: 'pointer' }}
+                    onClick={(e) => { e.stopPropagation(); setLightboxUrl(url) }} />
+                ))}
+              </div>
+            })()}
           </div>
           <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 16 }}>
             <Button type="text" icon={item.liked_by_me ? <HeartFilled style={{ color: '#ff4d4f' }} /> : <HeartOutlined />}
@@ -239,13 +244,30 @@ export default function FeedPage() {
       ))}
 
       {/* Create post modal */}
-      <Modal title="发布动态" open={postModalOpen} onCancel={() => { setPostModalOpen(false); setPostNote(''); setPostPhoto(null); setPostPhotoPreview('') }}
+      <Modal title="发布动态" open={postModalOpen} onCancel={() => { setPostModalOpen(false); setPostNote(''); setPostPhotos([]); setPostPhotoPreviews([]) }}
         onOk={handleCreatePost} confirmLoading={posting} okText="发布" centered>
         <Input.TextArea value={postNote} onChange={e => setPostNote(e.target.value)} placeholder="说说你在做什么..." rows={4} maxLength={500} showCount style={{ borderRadius: 10, marginBottom: 12 }} />
-        <Upload showUploadList={false} beforeUpload={(f) => { setPostPhoto(f); setPostPhotoPreview(URL.createObjectURL(f)); return false }} accept="image/*">
-          <Button icon={<PlusOutlined />} style={{ borderRadius: 8 }}>{postPhoto ? '换一张' : '添加图片'}</Button>
-        </Upload>
-        {postPhotoPreview && <img src={postPhotoPreview} alt="preview" style={{ width: '100%', borderRadius: 10, marginTop: 8, maxHeight: 200, objectFit: 'cover' }} />}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+          {postPhotoPreviews.map((preview, i) => (
+            <div key={i} style={{ position: 'relative', width: 72, height: 72 }}>
+              <img src={preview} alt="preview" style={{ width: 72, height: 72, borderRadius: 8, objectFit: 'cover' }} />
+              <CloseCircleOutlined style={{ position: 'absolute', top: -4, right: -4, fontSize: 16, color: '#ff4d4f', cursor: 'pointer' }}
+                onClick={() => { const newFiles = [...postPhotos]; newFiles.splice(i, 1); setPostPhotos(newFiles); const newPreviews = [...postPhotoPreviews]; newPreviews.splice(i, 1); setPostPhotoPreviews(newPreviews) }} />
+            </div>
+          ))}
+          {postPhotos.length < 3 && (
+            <Upload showUploadList={false} beforeUpload={(f) => { setPostPhotos([...postPhotos, f]); setPostPhotoPreviews([...postPhotoPreviews, URL.createObjectURL(f)]); return false }} accept="image/*">
+              <div style={{ width: 72, height: 72, borderRadius: 8, border: '1px dashed #d9d9d9', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                <PlusOutlined style={{ fontSize: 20, color: '#999' }} />
+              </div>
+            </Upload>
+          )}
+        </div>
+      </Modal>
+
+      {/* Image lightbox */}
+      <Modal open={!!lightboxUrl} onCancel={() => setLightboxUrl('')} footer={null} centered width="90vw">
+        {lightboxUrl && <img src={lightboxUrl} alt="preview" style={{ width: '100%', borderRadius: 8 }} />}
       </Modal>
 
       {/* User profile modal */}

@@ -117,6 +117,9 @@ def get_detail(dc_id):
         '*, profile:user_id(username, avatar_url)'
     ).eq('daily_challenge_id', dc_id).order('created_at').execute()
     item['comments'] = comments.data if comments.data else []
+    for c in item['comments']:
+        if 'photo_url' not in c:
+            c['photo_url'] = ''
 
     # Check if current user is friends with the post author
     is_friend = False
@@ -240,6 +243,25 @@ def add_comment():
     supabase.from_('comments').insert(insert_data).execute()
 
     return jsonify({'code': 0, 'message': '评论成功'})
+
+
+@feed_bp.route('/my-likes', methods=['GET'])
+def my_likes():
+    user_id = get_current_user()
+    if not user_id:
+        return jsonify({'code': 1, 'message': '未授权'}), 401
+    supabase = get_auth_supabase()
+    likes = supabase.from_('likes').select('daily_challenge_id, created_at').eq('user_id', user_id).order('created_at', desc=True).limit(50).execute()
+    dc_ids = [l['daily_challenge_id'] for l in (likes.data or [])]
+    posts = []
+    for dc_id in dc_ids:
+        dc = supabase.from_('daily_challenges').select('id, challenge:challenge_id(title), note, photo_url, created_at').eq('id', dc_id).single().execute()
+        if dc.data:
+            item = dict(dc.data)
+            _merge_custom_note(item)
+            item['liked_at'] = next((l['created_at'] for l in (likes.data or []) if l['daily_challenge_id'] == dc_id), '')
+            posts.append(item)
+    return jsonify({'code': 0, 'data': posts})
 
 
 @feed_bp.route('/notifications', methods=['GET'])
