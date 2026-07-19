@@ -79,7 +79,13 @@ def update_profile():
     data = request.get_json()
     update_data = {}
     if 'username' in data:
-        update_data['username'] = data['username']
+        new_username = data['username']
+        if new_username:
+            supabase = get_auth_supabase()
+            existing = supabase.from_('profiles').select('id').eq('username', new_username).neq('id', user_id).limit(1).execute()
+            if existing.data:
+                return jsonify({'code': 1, 'message': '该用户名已被注册'}), 400
+        update_data['username'] = new_username
     if 'avatar_url' in data:
         update_data['avatar_url'] = data['avatar_url']
     if 'bio' in data:

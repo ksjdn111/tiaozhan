@@ -20,6 +20,7 @@ export default function ProfilePage() {
   const [editOpen, setEditOpen] = useState(false)
   const [editUsername, setEditUsername] = useState('')
   const [editing, setEditing] = useState(false)
+  const [usernameError, setUsernameError] = useState('')
   const [avatarModalOpen, setAvatarModalOpen] = useState(false)
   const [bioModalOpen, setBioModalOpen] = useState(false)
   const [editBio, setEditBio] = useState('')
@@ -78,11 +79,23 @@ export default function ProfilePage() {
     fetchData()
   }, [])
 
+  useEffect(() => {
+    if (!editUsername || editUsername.length < 3 || editUsername === profile?.username) { setUsernameError(''); return }
+    const timer = setTimeout(async () => {
+      const res = await fetch(`${API}/auth/check-username?username=${encodeURIComponent(editUsername)}`)
+      const data = await res.json()
+      if (data.code === 0 && data.data?.exists) setUsernameError('该用户名已被注册')
+      else setUsernameError('')
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [editUsername, profile?.username])
+
   const handleEdit = () => { setEditUsername(profile?.username || ''); setEditOpen(true) }
 
   const handleSaveUsername = async () => {
     if (!editUsername.trim()) { message.error('用户名不能为空'); return }
     if (editUsername.length < 3 || editUsername.length > 20) { message.error('用户名长度需 3-20 个字符'); return }
+    if (usernameError) { message.error(usernameError); return }
     setEditing(true)
     const token = await getToken()
     const res = await fetch(`${API}/auth/profile`, {
@@ -335,7 +348,8 @@ export default function ProfilePage() {
 
       {/* Username modal */}
       <Modal title="修改用户名" open={editOpen} onOk={handleSaveUsername} onCancel={() => setEditOpen(false)} confirmLoading={editing} centered>
-        <Input value={editUsername} onChange={e => setEditUsername(e.target.value)} placeholder="请输入用户名" maxLength={20} showCount style={{ borderRadius: 10 }} />
+        <Input value={editUsername} onChange={e => { setEditUsername(e.target.value); setUsernameError('') }} placeholder="请输入用户名" maxLength={20} showCount style={{ borderRadius: 10 }} status={usernameError ? 'error' : undefined} />
+        {usernameError && <p style={{ fontSize: 12, color: '#ff4d4f', marginTop: 4 }}>{usernameError}</p>}
         <p style={{ fontSize: 12, color: '#999', marginTop: 8 }}>3-20 个字符，支持字母、数字、下划线和中文</p>
       </Modal>
     </div>

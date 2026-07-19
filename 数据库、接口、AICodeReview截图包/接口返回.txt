@@ -1,5 +1,3 @@
-# API 截图参考
-
 本文档列出用于截图的 curl 命令及其返回结果。可以直接在终端运行这些命令来截图，或者用 Postman 导入相同的请求。
 
 ---
@@ -152,33 +150,3 @@ curl -s -H "Authorization: Bearer <access_token>" \
     "total": 10
   }
 }
-```
-
----
-
-## 截图 8：数据库截图
-
-进入 Supabase Dashboard → SQL Editor，运行：
-
-```sql
-SELECT table_name, table_schema 
-FROM information_schema.tables 
-WHERE table_schema = 'public';
-```
-
-截图显示所有业务表（profiles, challenges, daily_challenges, likes, comments, comment_likes, friends, messages, badges, user_badges）。
-
----
-
-## 截图 9：Code Review 截图
-
-参考 `prompt_log.md` 中第 19 条记录，截图显示 AI 生成的 Code Review 内容即可。
-
----
-
-## 使用说明
-
-1. 在终端逐条运行上面的 curl 命令
-2. 将终端窗口和返回结果一起截屏
-3. 或者将命令导入 Postman，在 Postman 中执行后截图
-4. 截图保存到 `数据库、接口、AICodeReview截图包/` 文件夹

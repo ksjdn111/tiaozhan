@@ -181,6 +181,14 @@ export default function LoginPage() {
                   { min: 3, message: '用户名至少 3 个字符' },
                   { max: 20, message: '用户名最多 20 个字符' },
                   { pattern: /^[a-zA-Z0-9_\u4e00-\u9fa5]+$/, message: '只能包含字母、数字、下划线和中文' },
+                  { validator: async (_, value) => {
+                    if (!value || value.length < 3) return
+                    const res = await fetch(`${API}/auth/check-username?username=${encodeURIComponent(value)}`)
+                    const data = await res.json()
+                    if (data.code === 0 && data.data?.exists) {
+                      throw new Error('该用户名已被注册')
+                    }
+                  } },
                 ]}>
                   <Input prefix={<UserOutlined />} placeholder="用户名" maxLength={20} />
                 </Form.Item>
