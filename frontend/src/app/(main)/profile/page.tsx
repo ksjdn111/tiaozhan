@@ -5,8 +5,7 @@ import { Card, Button, Spin, Statistic, Row, Col, Empty, message, List, Tag, Mod
 import { LogoutOutlined, TrophyOutlined, EditOutlined, UserOutlined, FireOutlined, CheckCircleOutlined, HeartOutlined, SettingOutlined, SmileOutlined, BellOutlined, HeartFilled, MessageFilled } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-
-const API = '/api'
+import { API } from '@/lib/api'
 
 export default function ProfilePage() {
   const router = useRouter()

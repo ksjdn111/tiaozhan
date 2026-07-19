@@ -5,8 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button, Spin, Empty, message, Modal, Input, List, Avatar, Tag, Badge, Tabs } from 'antd'
 import { UserAddOutlined, UserOutlined, MessageOutlined, TeamOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons'
 import { supabase } from '@/lib/supabase'
-
-const API = '/api'
+import { API } from '@/lib/api'
 
 export default function FriendsPage() {
   const router = useRouter()

@@ -4,8 +4,7 @@ import { useEffect, useState } from 'react'
 import { Card, Button, Spin, Tag, Input, message, Empty, Upload, Progress, Modal, Select, Form } from 'antd'
 import { CheckCircleOutlined, CloseCircleOutlined, ThunderboltOutlined, PlusOutlined, FireOutlined, TrophyOutlined, EditOutlined } from '@ant-design/icons'
 import { supabase } from '@/lib/supabase'
-
-const API = '/api'
+import { API } from '@/lib/api'
 
 const difficultyColors: Record<number, string> = { 1: '#52c41a', 2: '#13c2c2', 3: '#fa8c16', 4: '#f5222d', 5: '#722ed1' }
 const difficultyLabels: Record<number, string> = { 1: '简单', 2: '轻松', 3: '中等', 4: '困难', 5: '极限' }

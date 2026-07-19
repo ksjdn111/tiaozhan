@@ -5,8 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Card, Button, Spin, Empty, Tag, message, Modal, Avatar, Divider } from 'antd'
 import { HeartOutlined, HeartFilled, ThunderboltOutlined, MessageOutlined, UserAddOutlined, UserOutlined } from '@ant-design/icons'
 import { supabase } from '@/lib/supabase'
-
-const API = '/api'
+import { API } from '@/lib/api'
 
 const difficultyColors: Record<number, string> = { 1: '#52c41a', 2: '#13c2c2', 3: '#fa8c16', 4: '#f5222d', 5: '#722ed1' }
 const categoryColors: Record<string, string> = { '运动': '#e6f7ff', '美食': '#fff7e6', '学习': '#f0f5ff', '创意': '#f9f0ff', '生活': '#e6fffb' }

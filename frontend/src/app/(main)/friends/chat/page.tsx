@@ -5,8 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { Button, Spin, Empty, message, Input, Avatar } from 'antd'
 import { ArrowLeftOutlined, SendOutlined, UserOutlined } from '@ant-design/icons'
 import { supabase } from '@/lib/supabase'
-
-const API = '/api'
+import { API } from '@/lib/api'
 
 export default function ChatPage() {
   const searchParams = useSearchParams()

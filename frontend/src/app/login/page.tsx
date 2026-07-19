@@ -6,8 +6,6 @@ import { Card, Form, Input, Button, Tabs, Progress, message } from 'antd'
 import { UserOutlined, LockOutlined, MailOutlined, CheckCircleFilled, CloseCircleFilled, ThunderboltOutlined } from '@ant-design/icons'
 import { supabase } from '@/lib/supabase'
 
-const API = '/api'
-
 const authErrors: Record<string, string> = {
   'Invalid login credentials': '邮箱或密码错误',
   'Email not confirmed': '邮箱尚未验证，请查收验证邮件',
