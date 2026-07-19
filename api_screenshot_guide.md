@@ -1,0 +1,184 @@
+# API 截图参考
+
+本文档列出用于截图的 curl 命令及其返回结果。可以直接在终端运行这些命令来截图，或者用 Postman 导入相同的请求。
+
+---
+
+## 截图 1：系统健康检查（GET）
+
+```bash
+curl -s http://119.29.221.173:5000/api/health
+```
+
+**返回：**
+```json
+{"code":0,"message":"ok"}
+```
+
+---
+
+## 截图 2：徽章列表（GET，无需认证）
+
+```bash
+curl -s http://119.29.221.173:5000/api/badges/list
+```
+
+**返回（12 个徽章）：**
+```json
+{
+  "code": 0,
+  "data": [
+    {"id": 1, "name": "初次挑战", "icon": "🏅", "description": "完成第一个挑战"},
+    {"id": 2, "name": "连续3天", "icon": "🔥", "description": "连续完成3天挑战"},
+    {"id": 3, "name": "连续7天", "icon": "💪", "description": "连续完成7天挑战"},
+    ...
+  ]
+}
+```
+
+---
+
+## 截图 3：用户登录（POST）
+
+```bash
+curl -s -X POST "https://ckmlzbcxbqmlqlffwank.supabase.co/auth/v1/token?grant_type=password" \
+  -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNrbWx6YmN4YnFtbHFsZmZ3YW5rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQwMjk5NDMsImV4cCI6MjA5OTYwNTk0M30.CMAvBAGZvl5exjVzCls_hrRXqm7GiLWyjFIJiUX4Yp0" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"your-email@example.com","password":"your-password"}'
+```
+
+**返回：**
+```json
+{
+  "access_token": "eyJhbGciOiJFUzI1NiIs...",
+  "token_type": "bearer",
+  "expires_in": 3600,
+  "refresh_token": "...",
+  "user": {"id": "...", "email": "..."}
+}
+```
+
+---
+
+## 截图 4：获取动态列表（GET，需认证）
+
+```bash
+# 先用登录拿到 token，然后：
+curl -s -H "Authorization: Bearer <access_token>" \
+  "http://119.29.221.173:5000/api/feed/list?page=1&size=2"
+```
+
+**返回：**
+```json
+{
+  "code": 0,
+  "data": [
+    {
+      "id": 63,
+      "challenge": {"title": "早睡1小时", "category": "生活", "difficulty": 2},
+      "profile": {"username": "林福灿", "avatar_url": "..."},
+      "like_count": 1,
+      "comment_count": 1,
+      "liked_by_me": false,
+      "created_at": "2026-07-19T11:16:23+00:00"
+    }
+  ]
+}
+```
+
+---
+
+## 截图 5：好友列表（GET，需认证）
+
+```bash
+curl -s -H "Authorization: Bearer <access_token>" \
+  "http://119.29.221.173:5000/api/friends/list"
+```
+
+**返回：**
+```json
+{
+  "code": 0,
+  "data": [
+    {
+      "friend_id": "3b63eb04-...",
+      "username": "iiii",
+      "last_message": "金顺",
+      "last_message_time": "2026-07-19T15:28:12+00:00",
+      "from_me": true
+    }
+  ]
+}
+```
+
+---
+
+## 截图 6：统计信息（GET，需认证）
+
+```bash
+curl -s -H "Authorization: Bearer <access_token>" \
+  "http://119.29.221.173:5000/api/badges/stats"
+```
+
+**返回：**
+```json
+{
+  "code": 0,
+  "data": {
+    "total_days": 2,
+    "total_completed": 2,
+    "total_likes_received": 1,
+    "streak": 0
+  }
+}
+```
+
+---
+
+## 截图 7：未读计数（GET，需认证）
+
+```bash
+curl -s -H "Authorization: Bearer <access_token>" \
+  "http://119.29.221.173:5000/api/friends/unread-count"
+```
+
+**返回：**
+```json
+{
+  "code": 0,
+  "data": {
+    "friend_requests": 0,
+    "unread_messages": 10,
+    "total": 10
+  }
+}
+```
+
+---
+
+## 截图 8：数据库截图
+
+进入 Supabase Dashboard → SQL Editor，运行：
+
+```sql
+SELECT table_name, table_schema 
+FROM information_schema.tables 
+WHERE table_schema = 'public';
+```
+
+截图显示所有业务表（profiles, challenges, daily_challenges, likes, comments, comment_likes, friends, messages, badges, user_badges）。
+
+---
+
+## 截图 9：Code Review 截图
+
+参考 `prompt_log.md` 中第 19 条记录，截图显示 AI 生成的 Code Review 内容即可。
+
+---
+
+## 使用说明
+
+1. 在终端逐条运行上面的 curl 命令
+2. 将终端窗口和返回结果一起截屏
+3. 或者将命令导入 Postman，在 Postman 中执行后截图
+4. 截图保存到 `数据库、接口、AICodeReview截图包/` 文件夹
