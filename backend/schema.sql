@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS challenges (
 
 ALTER TABLE challenges ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "challenges_select" ON challenges FOR SELECT USING (true);
+CREATE POLICY "challenges_insert" ON challenges FOR INSERT WITH CHECK (auth.uid() = creator_id::uuid);
 
 -- 每日挑战
 CREATE TABLE IF NOT EXISTS daily_challenges (

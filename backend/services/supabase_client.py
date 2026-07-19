@@ -41,9 +41,16 @@ def get_supabase() -> Client:
     return _supabase
 
 def get_auth_supabase() -> Client:
-    """Get a supabase client authenticated with the current user's JWT (from g.jwt_token)."""
-    client = get_supabase()
+    """Get a per-request supabase client with the current user's JWT (from g.jwt_token).
+    Creates a fresh client per request to avoid global state pollution across threads.
+    """
     token = getattr(g, 'jwt_token', None)
     if token:
+        cached = getattr(g, '_auth_supabase', None)
+        if cached:
+            return cached
+        client = _make_client()
         client.postgrest.auth(token)
-    return client
+        g._auth_supabase = client
+        return client
+    return get_supabase()

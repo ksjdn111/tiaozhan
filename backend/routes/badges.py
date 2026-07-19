@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from services.supabase_client import get_auth_supabase
+from services.supabase_client import get_auth_supabase, get_supabase
 from utils.auth import get_current_user
 
 badges_bp = Blueprint('badges', __name__)
@@ -31,45 +31,49 @@ def get_stats():
 
     from datetime import date, timedelta
 
-    supabase = get_auth_supabase()
-    total = supabase.from_('daily_challenges').select('id', count='exact').eq('user_id', user_id).execute()
-    completed = supabase.from_('daily_challenges').select('id', count='exact').eq('user_id', user_id).eq('status', 'done').execute()
+    def _get_dates(records):
+        ds = set()
+        for r in (records or []):
+            d = r.get('date', r) if isinstance(r, dict) else r
+            if isinstance(d, str):
+                ds.add(d[:10])
+            else:
+                ds.add(d.isoformat()[:10])
+        return sorted(ds, reverse=True)
 
-    done_records = supabase.from_('daily_challenges').select('date').eq('user_id', user_id).eq('status', 'done').execute()
+    s = get_supabase()
+    all_records = s.from_('daily_challenges').select('date').eq('user_id', user_id).execute()
+    done_records = s.from_('daily_challenges').select('date').eq('user_id', user_id).eq('status', 'done').execute()
 
-    # Normalize dates to ISO strings
-    dates_set = set()
-    for r in (done_records.data or []):
-        d = r['date']
-        if isinstance(d, str):
-            dates_set.add(d[:10])
-        else:
-            dates_set.add(d.isoformat()[:10])
-    done_dates = sorted(dates_set, reverse=True)
+    all_dates = _get_dates(all_records.data)
+    done_dates = _get_dates(done_records.data)
+
+    # Distinct day counts
+    total_days = len(all_dates)
+    total_completed = len(done_dates)
 
     # Streak calculation using string comparison
     streak = 0
-    today_str = date.today().isoformat()
     for i in range(len(done_dates)):
         expected = (date.today() - timedelta(days=i)).isoformat()
-        if i < len(done_dates) and done_dates[i] == expected:
+        if done_dates[i] == expected:
             streak += 1
         else:
             break
 
-    user_dc_ids = supabase.from_('daily_challenges').select('id').eq('user_id', user_id).execute()
+    user_dc_ids = s.from_('daily_challenges').select('id').eq('user_id', user_id).execute()
     ids = [d['id'] for d in user_dc_ids.data]
     likes_received = 0
     if ids:
-        likes_received = supabase.from_('likes').select('id', count='exact').in_('daily_challenge_id', ids).execute()
-        likes_received = likes_received.count
+        resp = s.from_('likes').select('id', count='exact').in_('daily_challenge_id', ids).execute()
+        likes_received = resp.count
 
     return jsonify({
         'code': 0,
         'data': {
-            'total_days': total.count,
-            'total_completed': completed.count,
-            'total_likes_received': likes_received.count,
+            'total_days': total_days,
+            'total_completed': total_completed,
+            'total_likes_received': likes_received,
             'streak': streak,
         }
     })

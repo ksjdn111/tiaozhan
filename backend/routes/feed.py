@@ -1,8 +1,29 @@
 from flask import Blueprint, request, jsonify
 from services.supabase_client import get_auth_supabase
 from utils.auth import get_current_user
+import json
 
 feed_bp = Blueprint('feed', __name__)
+
+def _merge_custom_note(item):
+    if not item or not isinstance(item, dict):
+        return item
+    note = item.get('note')
+    if note and isinstance(note, str) and note.startswith('{'):
+        try:
+            custom = json.loads(note)
+            if custom.get('custom'):
+                chal = item.get('challenge') or {}
+                chal['title'] = custom.get('title', chal.get('title', ''))
+                chal['description'] = custom.get('description', chal.get('description', ''))
+                chal['category'] = custom.get('category', chal.get('category', ''))
+                chal['difficulty'] = custom.get('difficulty', chal.get('difficulty', 3))
+                chal['creator_id'] = custom.get('creator_id', chal.get('creator_id'))
+                item['challenge'] = chal
+                item['_is_custom'] = True
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return item
 
 @feed_bp.route('/list', methods=['GET'])
 def get_feed():
@@ -38,6 +59,7 @@ def get_feed():
         item['liked_by_me'] = item['id'] in liked_ids
         item['like_count'] = len(item.get('likes', []))
         item['comment_count'] = comment_counts.get(item['id'], 0)
+        _merge_custom_note(item)
 
     return jsonify({'code': 0, 'data': result.data})
 
@@ -107,6 +129,7 @@ def get_detail(dc_id):
             break
     item['is_friend'] = is_friend
     item['is_self'] = str(item['user_id']) == str(user_id)
+    _merge_custom_note(item)
 
     return jsonify({'code': 0, 'data': item})
 
